@@ -772,29 +772,46 @@ function loadImages(input) {
     r.readAsDataURL(file);
   });
 
-  Promise.all(files.map(async (file, idx) => {
-    // サムネ
-    const src = await readAsDataURL(file);
+  let processed = 0;
+  Promise.all(files.map(async file => {
+    const raw = await readAsDataURL(file);
+
+    // サムネは元画像（表示用）
     const img = document.createElement('img');
-    img.src = src;
+    img.src = raw;
     img.style.cssText = 'height:60px;border-radius:4px;border:1px solid #ddd';
     thumbRow.appendChild(img);
-    return src;
-  })).then(srcs => {
-    let processed = 0;
-    return Promise.all(srcs.map(async src => {
-      try {
-        const items = await runOcrOnImage(src, apiKey);
-        ocrDetectedItems.push(...items);
-      } catch(err) {
-        console.error(err);
-      }
-      processed++;
-      showOcrStatus(`読み取り中... ${processed} / ${files.length}`, 'loading');
-    }));
-  }).then(() => {
+
+    // API送信用：1600px以下にリサイズ＋JPEG圧縮で容量を大幅削減
+    const compressed = await compressImage(raw, 1600, 0.82);
+
+    try {
+      const items = await runOcrOnImage(compressed, apiKey);
+      ocrDetectedItems.push(...items);
+    } catch(err) {
+      console.error(err);
+    }
+    processed++;
+    showOcrStatus(`読み取り中... ${processed} / ${files.length}`, 'loading');
+  })).then(() => {
     showOcrStatus(`完了！ ${ocrDetectedItems.length}件検出`, 'ok');
     renderOcrItems();
+  });
+}
+
+function compressImage(src, maxPx, quality) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = src;
   });
 }
 
@@ -812,7 +829,7 @@ async function runOcrOnImage(src, apiKey) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
+      max_tokens: 1024,
       messages: [{
         role: 'user',
         content: [
