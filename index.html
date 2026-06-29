@@ -443,6 +443,7 @@ function changeMonth(delta) {
 }
 
 let activeTab = 'サマリー';
+let sortOrder = 'default'; // default / name / price_asc / price_desc / qty_asc / qty_desc / sub_desc
 
 function renderTabs() {
   document.getElementById('tabs').innerHTML = CATEGORIES.map(c =>
@@ -498,6 +499,21 @@ function catTotal(cat) {
   return (data[cat] || []).reduce((s,x) => s + x.price * x.qty, 0);
 }
 
+function setSortOrder(val) { sortOrder = val; renderPanel(); }
+
+function sortedItems(items) {
+  const idx = items.map((item, i) => ({ item, i }));
+  switch (sortOrder) {
+    case 'name':      return idx.sort((a,b) => a.item.name.localeCompare(b.item.name, 'ja'));
+    case 'price_asc': return idx.sort((a,b) => a.item.price - b.item.price);
+    case 'price_desc':return idx.sort((a,b) => b.item.price - a.item.price);
+    case 'qty_asc':   return idx.sort((a,b) => a.item.qty - b.item.qty);
+    case 'qty_desc':  return idx.sort((a,b) => b.item.qty - a.item.qty);
+    case 'sub_desc':  return idx.sort((a,b) => (b.item.price*b.item.qty) - (a.item.price*a.item.qty));
+    default:          return idx;
+  }
+}
+
 // ---- カテゴリパネル ----
 function renderPanel() {
   if (activeTab === 'サマリー') { renderSummary(); return; }
@@ -507,7 +523,8 @@ function renderPanel() {
   const totalQty = items.reduce((s,x) => s + x.qty, 0);
   const taxLabel = TAX_RATE[cat] === 1.08 ? '8%' : '10%';
 
-  const rows = items.map((item, i) => {
+  const sorted = sortedItems(items);
+  const rows = sorted.map(({ item, i }) => {
     const sub = item.price * item.qty;
     return `<tr id="row-${i}">
       <td style="min-width:0">
@@ -549,6 +566,15 @@ function renderPanel() {
         <input type="number" id="f-price" placeholder="単価（税抜）" min="0" />
         <input type="number" id="f-qty" placeholder="数量" min="0" step="0.1" value="1" />
         <button class="btn btn-green" onclick="addItem()">追加</button>
+        <select onchange="setSortOrder(this.value)" style="flex:none;padding:7px 8px;border:1px solid #ccc;border-radius:5px;font-size:0.85rem;color:#444">
+          <option value="default" ${sortOrder==='default'?'selected':''}>登録順</option>
+          <option value="name" ${sortOrder==='name'?'selected':''}>あいうえお順</option>
+          <option value="price_asc" ${sortOrder==='price_asc'?'selected':''}>単価↑安い順</option>
+          <option value="price_desc" ${sortOrder==='price_desc'?'selected':''}>単価↓高い順</option>
+          <option value="qty_desc" ${sortOrder==='qty_desc'?'selected':''}>数量↓多い順</option>
+          <option value="qty_asc" ${sortOrder==='qty_asc'?'selected':''}>数量↑少ない順</option>
+          <option value="sub_desc" ${sortOrder==='sub_desc'?'selected':''}>小計↓高い順</option>
+        </select>
       </div>
       <div style="padding:8px 18px;background:#fafafa;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px">
         <label style="font-size:0.85rem;color:#555;cursor:pointer">
