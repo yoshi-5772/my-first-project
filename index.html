@@ -179,6 +179,7 @@
 
     .print-name { display: none; }
     .print-val { display: none; }
+    .print-title { display: none; }
     @media print {
       header, .tabs, .form-row, .top-btns, .btn, .btn-del, .modal-bg { display: none !important; }
       small { display: none !important; }
@@ -187,6 +188,7 @@
       .name-input, .qty-input { display: none !important; }
       .container { margin: 0; padding: 0; }
       .card { box-shadow: none; border: 1px solid #ccc; }
+      .print-title { display: block !important; text-align: center; font-size: 2rem; font-weight: 700; padding: 16px 0 8px; letter-spacing: 0.05em; }
     }
   </style>
 </head>
@@ -207,6 +209,8 @@
 </header>
 
 <div class="tabs" id="tabs"></div>
+
+<div class="print-title">棚卸し表 — Golot</div>
 
 <div class="container">
   <div id="panel"></div>
