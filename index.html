@@ -164,10 +164,14 @@
     .drop-zone:hover, .drop-zone.drag { border-color: #2c7a4b; color: #2c7a4b; }
     .drop-zone img { max-width: 100%; max-height: 200px; border-radius: 6px; margin-top: 10px; }
     .ocr-status { padding: 10px; background: #f0fdf4; border-radius: 6px; font-size: 0.9rem; color: #166534; margin-bottom: 12px; }
-    .ocr-result { border: 1px solid #ddd; border-radius: 6px; padding: 10px; font-size: 0.85rem; color: #444; white-space: pre-wrap; max-height: 160px; overflow-y: auto; margin-bottom: 12px; background: #fafafa; }
-    .ocr-fields { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-    .ocr-fields input { flex: 1; min-width: 100px; padding: 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 0.9rem; }
-    .ocr-fields input:focus { outline: none; border-color: #2c7a4b; }
+    .ocr-result { border: 1px solid #ddd; border-radius: 6px; padding: 10px; font-size: 0.85rem; color: #444; white-space: pre-wrap; max-height: 120px; overflow-y: auto; margin-bottom: 12px; background: #fafafa; }
+    .ocr-item-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+    .ocr-item-table th { background: #f4f7f4; padding: 7px 8px; font-size: 0.8rem; color: #666; border-bottom: 1px solid #e0e0e0; text-align: left; }
+    .ocr-item-table td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; font-size: 0.88rem; }
+    .ocr-item-table input[type=text], .ocr-item-table input[type=number] {
+      width: 100%; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem;
+    }
+    .ocr-item-table input[type=text]:focus, .ocr-item-table input[type=number]:focus { outline: none; border-color: #2c7a4b; }
     .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
     .btn-gray { background: #e5e7eb; color: #374151; }
     .btn-gray:hover { background: #d1d5db; }
@@ -202,29 +206,24 @@
 <!-- OCRモーダル -->
 <div class="modal-bg" id="ocr-modal">
   <div class="modal">
-    <h3>写真から品目を追加</h3>
-    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('img-input').click()">
-      <div id="drop-text">ここをタップして写真を選択<br><small>（納品書・値札・棚の写真など）</small></div>
-      <input type="file" id="img-input" accept="image/*" style="display:none" onchange="loadImage(this)">
-    </div>
+    <h3>写真から品目を追加 <small style="font-size:0.8rem;color:#888;font-weight:normal">追加先: <span id="ocr-cat"></span></small></h3>
     <div id="api-key-row" style="display:none;gap:8px;margin-bottom:12px;align-items:center">
       <input type="password" id="api-key-input" placeholder="Anthropic APIキーを入力（初回のみ）"
         style="flex:1;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:0.85rem">
-      <small style="color:#888;white-space:nowrap">保存済み</small>
+    </div>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('img-input').click()">
+      <div id="drop-text">ここをタップして写真を選択（複数枚OK）<br><small>納品書・値札など</small></div>
+      <input type="file" id="img-input" accept="image/*" multiple style="display:none" onchange="loadImages(this)">
+      <div id="thumb-row" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:8px"></div>
     </div>
     <div class="ocr-status" id="ocr-status" style="display:none"></div>
-    <div class="ocr-result" id="ocr-result" style="display:none"></div>
-    <p style="font-size:0.85rem;color:#666;margin-bottom:10px;">読み取り結果を確認して品目・単価を入力してください</p>
-    <div class="ocr-fields">
-      <input type="text" id="ocr-name" placeholder="品名" />
-      <input type="text" id="ocr-unit" placeholder="単位" style="max-width:70px" />
-      <input type="number" id="ocr-price" placeholder="単価（税抜）" min="0" />
-      <input type="number" id="ocr-qty" placeholder="数量" min="0" step="0.1" value="1" />
+    <div id="ocr-items-area" style="display:none">
+      <p style="font-size:0.85rem;color:#555;margin-bottom:8px;">追加する品目にチェックを入れて「まとめて追加」してください</p>
+      <div id="ocr-items-list"></div>
     </div>
-    <div style="font-size:0.8rem;color:#888;margin-bottom:12px;">追加先カテゴリ: <strong id="ocr-cat"></strong></div>
-    <div class="modal-btns">
+    <div class="modal-btns" style="margin-top:14px">
       <button class="btn btn-gray" onclick="closeOcr()">キャンセル</button>
-      <button class="btn btn-green" onclick="addFromOcr()">追加</button>
+      <button class="btn btn-green" id="ocr-add-btn" onclick="addFromOcr()" style="display:none">まとめて追加</button>
     </div>
   </div>
 </div>
@@ -614,26 +613,19 @@ function getApiKey() { return localStorage.getItem('claude_api_key') || ''; }
 function saveApiKey(k) { localStorage.setItem('claude_api_key', k); }
 
 // ---- OCR ----
+let ocrDetectedItems = [];
+
 function openOcr() {
   document.getElementById('ocr-cat').textContent = activeTab;
   document.getElementById('ocr-status').style.display = 'none';
-  document.getElementById('ocr-result').style.display = 'none';
-  document.getElementById('ocr-name').value = '';
-  document.getElementById('ocr-unit').value = '';
-  document.getElementById('ocr-price').value = '';
-  document.getElementById('ocr-qty').value = '1';
-  document.getElementById('drop-text').innerHTML = 'ここをタップして写真を選択<br><small>（納品書・値札・棚の写真など）</small>';
-  const old = document.getElementById('drop-zone').querySelector('img');
-  if (old) old.remove();
+  document.getElementById('ocr-items-area').style.display = 'none';
+  document.getElementById('ocr-items-list').innerHTML = '';
+  document.getElementById('ocr-add-btn').style.display = 'none';
+  document.getElementById('thumb-row').innerHTML = '';
+  document.getElementById('drop-text').innerHTML = 'ここをタップして写真を選択（複数枚OK）<br><small>納品書・値札など</small>';
   document.getElementById('img-input').value = '';
-
-  // APIキー未設定なら入力欄を表示
-  const keyRow = document.getElementById('api-key-row');
-  if (!getApiKey()) {
-    keyRow.style.display = 'flex';
-  } else {
-    keyRow.style.display = 'none';
-  }
+  ocrDetectedItems = [];
+  document.getElementById('api-key-row').style.display = getApiKey() ? 'none' : 'flex';
   document.getElementById('ocr-modal').classList.add('open');
 }
 
@@ -641,114 +633,155 @@ function closeOcr() {
   document.getElementById('ocr-modal').classList.remove('open');
 }
 
-function loadImage(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const dz = document.getElementById('drop-zone');
-    const old = dz.querySelector('img');
-    if (old) old.remove();
-    const img = document.createElement('img');
-    img.src = e.target.result;
-    dz.appendChild(img);
-    document.getElementById('drop-text').textContent = '';
-    runOcr(e.target.result);
-  };
-  reader.readAsDataURL(file);
-}
+function loadImages(input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
 
-async function runOcr(src) {
-  const status = document.getElementById('ocr-status');
-  const result = document.getElementById('ocr-result');
-  status.style.display = 'block';
-  status.textContent = 'Claude AIで読み取り中...';
-  result.style.display = 'none';
+  // サムネイル表示
+  const thumbRow = document.getElementById('thumb-row');
+  thumbRow.innerHTML = '';
+  document.getElementById('drop-text').textContent = `${files.length}枚選択済み`;
 
-  // APIキーを保存
+  // APIキー保存
   const keyInput = document.getElementById('api-key-input');
   if (keyInput && keyInput.value.trim()) saveApiKey(keyInput.value.trim());
-
   const apiKey = getApiKey();
   if (!apiKey) {
-    status.textContent = 'APIキーを入力してください';
-    status.style.background = '#fef2f2';
-    status.style.color = '#991b1b';
+    showOcrStatus('APIキーを入力してください', 'error');
     return;
   }
 
-  // base64部分だけ取り出す
+  ocrDetectedItems = [];
+  document.getElementById('ocr-items-area').style.display = 'none';
+  document.getElementById('ocr-items-list').innerHTML = '';
+  document.getElementById('ocr-add-btn').style.display = 'none';
+
+  let processed = 0;
+  showOcrStatus(`読み取り中... 0 / ${files.length}`, 'loading');
+
+  files.forEach((file, idx) => {
+    const reader = new FileReader();
+
+    // サムネ
+    const thumbReader = new FileReader();
+    thumbReader.onload = e => {
+      const img = document.createElement('img');
+      img.src = e.target.result;
+      img.style.cssText = 'height:60px;border-radius:4px;border:1px solid #ddd';
+      thumbRow.appendChild(img);
+    };
+    thumbReader.readAsDataURL(file);
+
+    reader.onload = async e => {
+      try {
+        const items = await runOcrOnImage(e.target.result, apiKey);
+        ocrDetectedItems.push(...items);
+      } catch(err) {
+        console.error(err);
+      }
+      processed++;
+      showOcrStatus(`読み取り中... ${processed} / ${files.length}`, 'loading');
+      if (processed === files.length) {
+        showOcrStatus(`完了！ ${ocrDetectedItems.length}件検出`, 'ok');
+        renderOcrItems();
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function runOcrOnImage(src, apiKey) {
   const base64 = src.split(',')[1];
   const mediaType = src.split(';')[0].split(':')[1];
 
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: mediaType, data: base64 }
-            },
-            {
-              type: 'text',
-              text: `この画像は店舗の納品書・請求書・値札などです。
-画像から品名と価格（税抜き単価）を読み取ってください。
-複数ある場合は最初の1つだけ返してください。
-以下のJSON形式のみで返答してください（説明不要）:
-{"name":"品名","unit":"単位(k/本/p/個など)","price":数値}`
-            }
-          ]
-        }]
-      })
-    });
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2048,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: 'text', text: `この画像は店舗の納品書・請求書・値札などです。
+画像に含まれる全ての品目と税抜き単価を読み取ってください。
+JSON配列のみで返答してください（説明・コードブロック不要）:
+[{"name":"品名","unit":"単位(k/本/p/個など)","price":数値},...]` }
+        ]
+      }]
+    })
+  });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || res.status);
-    }
-
-    const json = await res.json();
-    const text = json.content[0].text.trim();
-    result.style.display = 'block';
-    result.textContent = text;
-
-    try {
-      const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-      if (parsed.name) document.getElementById('ocr-name').value = parsed.name;
-      if (parsed.unit) document.getElementById('ocr-unit').value = parsed.unit;
-      if (parsed.price) document.getElementById('ocr-price').value = parsed.price;
-      status.textContent = '読み取り完了！内容を確認して追加してください。';
-      status.style.background = '#f0fdf4';
-      status.style.color = '#166534';
-    } catch {
-      status.textContent = '読み取り完了。内容を確認して入力してください。';
-    }
-  } catch(e) {
-    status.textContent = `エラー: ${e.message}`;
-    status.style.background = '#fef2f2';
-    status.style.color = '#991b1b';
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error?.message || res.status);
   }
+  const json = await res.json();
+  const text = json.content[0].text.trim().replace(/```json|```/g, '').trim();
+  const parsed = JSON.parse(text);
+  return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+function renderOcrItems() {
+  if (!ocrDetectedItems.length) return;
+  const list = document.getElementById('ocr-items-list');
+  list.innerHTML = `
+    <table class="ocr-item-table">
+      <thead><tr>
+        <th style="width:28px"><input type="checkbox" id="ocr-check-all" checked onchange="toggleAllOcr(this)"></th>
+        <th>品名</th><th style="width:70px">単位</th><th style="width:90px">単価（税抜）</th><th style="width:70px">数量</th>
+      </tr></thead>
+      <tbody>
+        ${ocrDetectedItems.map((item, i) => `
+        <tr>
+          <td><input type="checkbox" class="ocr-chk" checked></td>
+          <td><input type="text" value="${item.name || ''}" oninput="ocrDetectedItems[${i}].name=this.value"></td>
+          <td><input type="text" value="${item.unit || '—'}" oninput="ocrDetectedItems[${i}].unit=this.value"></td>
+          <td><input type="number" value="${item.price || ''}" min="0" oninput="ocrDetectedItems[${i}].price=parseFloat(this.value)||0"></td>
+          <td><input type="number" value="1" min="0" step="0.1" oninput="ocrDetectedItems[${i}].qty=parseFloat(this.value)||0"></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  // qtyを初期化
+  ocrDetectedItems.forEach(x => x.qty = 1);
+  document.getElementById('ocr-items-area').style.display = 'block';
+  document.getElementById('ocr-add-btn').style.display = 'inline-block';
+}
+
+function toggleAllOcr(cb) {
+  document.querySelectorAll('.ocr-chk').forEach(c => c.checked = cb.checked);
+}
+
+function showOcrStatus(msg, type) {
+  const el = document.getElementById('ocr-status');
+  el.style.display = 'block';
+  el.textContent = msg;
+  el.style.background = type === 'error' ? '#fef2f2' : type === 'ok' ? '#f0fdf4' : '#fffbeb';
+  el.style.color = type === 'error' ? '#991b1b' : type === 'ok' ? '#166534' : '#92400e';
 }
 
 function addFromOcr() {
-  const name = document.getElementById('ocr-name').value.trim();
-  const unit = document.getElementById('ocr-unit').value.trim() || '—';
-  const priceEx = parseFloat(document.getElementById('ocr-price').value);
-  const qty = parseFloat(document.getElementById('ocr-qty').value) || 0;
-  if (!name || isNaN(priceEx)) { alert('品名と単価を入力してください'); return; }
-  data[activeTab].push({ name, unit, priceEx, price: tin(priceEx, activeTab), qty });
+  const checks = document.querySelectorAll('.ocr-chk');
+  let added = 0;
+  ocrDetectedItems.forEach((item, i) => {
+    if (!checks[i] || !checks[i].checked) return;
+    if (!item.name || !item.price) return;
+    data[activeTab].push({
+      name: item.name,
+      unit: item.unit || '—',
+      priceEx: item.price,
+      price: tin(item.price, activeTab),
+      qty: item.qty || 1
+    });
+    added++;
+  });
+  if (added === 0) { alert('追加する品目を選択してください'); return; }
   save();
   closeOcr();
   renderPanel();
@@ -760,13 +793,13 @@ dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dra
 dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
 dz.addEventListener('drop', e => {
   e.preventDefault(); dz.classList.remove('drag');
-  const file = e.dataTransfer.files[0];
-  if (file && file.type.startsWith('image/')) {
+  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+  if (files.length) {
     const input = document.getElementById('img-input');
     const dt = new DataTransfer();
-    dt.items.add(file);
+    files.forEach(f => dt.items.add(f));
     input.files = dt.files;
-    loadImage(input);
+    loadImages(input);
   }
 });
 
