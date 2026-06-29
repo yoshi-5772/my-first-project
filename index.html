@@ -171,6 +171,7 @@
     .ocr-item-table input[type=text], .ocr-item-table input[type=number] {
       width: 100%; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem;
     }
+    .ocr-item-table td:nth-child(2) { min-width: 140px; }
     .ocr-item-table input[type=text]:focus, .ocr-item-table input[type=number]:focus { outline: none; border-color: #2c7a4b; }
     .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
     .btn-gray { background: #e5e7eb; color: #374151; }
@@ -447,7 +448,11 @@ function renderPanel() {
   const rows = items.map((item, i) => {
     const sub = item.price * item.qty;
     return `<tr id="row-${i}">
-      <td><input class="name-input" type="text" value="${item.name}" oninput="updateName('${cat}',${i},this.value)"><span class="print-name">${item.name}</span></td>
+      <td style="min-width:0">
+        <input class="chk-item" type="checkbox" style="margin-right:6px;vertical-align:middle">
+        <input class="name-input" type="text" value="${item.name}" oninput="updateName('${cat}',${i},this.value)">
+        <span class="print-name">${item.name}</span>
+      </td>
       <td class="muted">${item.unit}</td>
       <td class="right">
         <input class="qty-input" type="number" min="0" step="1"
@@ -480,6 +485,12 @@ function renderPanel() {
         <input type="number" id="f-price" placeholder="単価（税抜）" min="0" />
         <input type="number" id="f-qty" placeholder="数量" min="0" step="0.1" value="1" />
         <button class="btn btn-green" onclick="addItem()">追加</button>
+      </div>
+      <div style="padding:8px 18px;background:#fafafa;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px">
+        <label style="font-size:0.85rem;color:#555;cursor:pointer">
+          <input type="checkbox" id="chk-all" onchange="toggleAllItems(this)"> 全選択
+        </label>
+        <button class="btn btn-del" style="font-size:0.82rem;padding:4px 12px" onclick="bulkDelete('${cat}')">選択削除</button>
       </div>
       <table>
         <thead><tr>
@@ -582,6 +593,23 @@ function delItem(cat, i) {
   save(); renderPanel();
 }
 
+function toggleAllItems(cb) {
+  document.querySelectorAll('.chk-item').forEach(c => c.checked = cb.checked);
+}
+
+function bulkDelete(cat) {
+  const checks = document.querySelectorAll('.chk-item');
+  const toDelete = [];
+  checks.forEach((chk, i) => { if (chk.checked) toDelete.push(i); });
+  if (!toDelete.length) { alert('削除する品目を選択してください'); return; }
+  if (!confirm(`${toDelete.length}件を削除しますか？`)) return;
+  // 後ろから削除してインデックスがずれないようにする
+  for (let i = toDelete.length - 1; i >= 0; i--) {
+    data[cat].splice(toDelete[i], 1);
+  }
+  save(); renderPanel();
+}
+
 // ---- CSV（カテゴリ別区切り＋小計） ----
 function downloadCSV() {
   const date = new Date().toLocaleDateString('ja-JP').replace(/\//g,'-');
@@ -656,37 +684,38 @@ function loadImages(input) {
   document.getElementById('ocr-items-list').innerHTML = '';
   document.getElementById('ocr-add-btn').style.display = 'none';
 
-  let processed = 0;
   showOcrStatus(`読み取り中... 0 / ${files.length}`, 'loading');
 
-  files.forEach((file, idx) => {
-    const reader = new FileReader();
+  // 全ファイルを並列読み込み
+  const readAsDataURL = file => new Promise(resolve => {
+    const r = new FileReader();
+    r.onload = e => resolve(e.target.result);
+    r.readAsDataURL(file);
+  });
 
+  Promise.all(files.map(async (file, idx) => {
     // サムネ
-    const thumbReader = new FileReader();
-    thumbReader.onload = e => {
-      const img = document.createElement('img');
-      img.src = e.target.result;
-      img.style.cssText = 'height:60px;border-radius:4px;border:1px solid #ddd';
-      thumbRow.appendChild(img);
-    };
-    thumbReader.readAsDataURL(file);
-
-    reader.onload = async e => {
+    const src = await readAsDataURL(file);
+    const img = document.createElement('img');
+    img.src = src;
+    img.style.cssText = 'height:60px;border-radius:4px;border:1px solid #ddd';
+    thumbRow.appendChild(img);
+    return src;
+  })).then(srcs => {
+    let processed = 0;
+    return Promise.all(srcs.map(async src => {
       try {
-        const items = await runOcrOnImage(e.target.result, apiKey);
+        const items = await runOcrOnImage(src, apiKey);
         ocrDetectedItems.push(...items);
       } catch(err) {
         console.error(err);
       }
       processed++;
       showOcrStatus(`読み取り中... ${processed} / ${files.length}`, 'loading');
-      if (processed === files.length) {
-        showOcrStatus(`完了！ ${ocrDetectedItems.length}件検出`, 'ok');
-        renderOcrItems();
-      }
-    };
-    reader.readAsDataURL(file);
+    }));
+  }).then(() => {
+    showOcrStatus(`完了！ ${ocrDetectedItems.length}件検出`, 'ok');
+    renderOcrItems();
   });
 }
 
@@ -703,22 +732,27 @@ async function runOcrOnImage(src, apiKey) {
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       messages: [{
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: `この画像は店舗の納品書・請求書・値札などです。
-画像に含まれる全ての品目・税抜き単価・カテゴリを読み取ってください。
-カテゴリは以下から最も適切なものを選んでください:
-- 精肉: 牛・豚・鶏肉、内臓、ハム・ソーセージなど
-- 食材: 野菜・魚介・乳製品・ソース・調理済み食品など
-- 調味料: 醤油・酢・塩・砂糖・油・スパイスなど
-- 酒/飲材: ビール・ワイン・日本酒・焼酎・ジュース・炭酸など
-- 備品/包材: 洗剤・包装材・ラップ・手袋・消耗品など
-JSON配列のみで返答してください（説明・コードブロック不要）:
-[{"name":"品名","unit":"単位(k/本/p/個など)","price":数値,"category":"カテゴリ名"},...]` }
+          { type: 'text', text: `この画像は飲食店の納品書・請求書・値札などです。
+画像に含まれる全ての品目を読み取り、以下の形式のJSON配列のみで返答してください（前置き・説明・コードブロック一切不要）:
+[{"name":"品名","unit":"単位","price":税抜単価の数値,"category":"カテゴリ名"},...]
+
+読み取りルール:
+- 品名: 正確に読み取る。長い場合も省略せず全て記載
+- 単位: k（kg）/本/p（パック）/個/枚/cs（ケース）/束/缶/ℓ/g など
+- price: 税抜き単価の数値のみ（税込なら÷1.08または÷1.10して概算）。不明な場合は0
+- category は以下から選択:
+  精肉（牛・豚・鶏・内臓・ハム等）
+  食材（野菜・魚介・乳製品・ソース・調理食品等）
+  調味料（醤油・酢・塩・砂糖・油・スパイス等）
+  酒/飲材（ビール・ワイン・日本酒・焼酎・ジュース・炭酸等）
+  備品/包材（洗剤・包装材・ラップ・手袋・消耗品等）
+- 合計行・小計行・消費税行は除外する` }
         ]
       }]
     })
