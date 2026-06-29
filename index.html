@@ -77,6 +77,13 @@
     tbody td.right { text-align: right; }
     tbody td.muted { color: #aaa; }
 
+    .name-input {
+      width: 100%; padding: 5px 7px;
+      border: 1px solid #ccc; border-radius: 4px;
+      font-size: 0.9rem;
+    }
+    .name-input:focus { outline: none; border-color: #2c7a4b; }
+
     .qty-input {
       width: 70px; padding: 5px 7px;
       border: 1px solid #ccc; border-radius: 4px;
@@ -165,8 +172,11 @@
     .btn-gray { background: #e5e7eb; color: #374151; }
     .btn-gray:hover { background: #d1d5db; }
 
+    .print-name { display: none; }
     @media print {
-      header, .tabs, .form-row, .top-btns, .btn, .btn-del, .qty-input, .modal-bg { display: none !important; }
+      header, .tabs, .form-row, .top-btns, .btn, .btn-del, .qty-input, .name-input, .modal-bg { display: none !important; }
+      small { display: none !important; }
+      .print-name { display: inline !important; }
       .container { margin: 0; padding: 0; }
       .card { box-shadow: none; border: 1px solid #ccc; }
     }
@@ -400,7 +410,7 @@ function renderPanel() {
   const rows = items.map((item, i) => {
     const sub = item.price * item.qty;
     return `<tr id="row-${i}">
-      <td>${item.name}</td>
+      <td><input class="name-input" type="text" value="${item.name}" oninput="updateName('${cat}',${i},this.value)"><span class="print-name">${item.name}</span></td>
       <td class="muted">${item.unit}</td>
       <td class="right">
         <input class="qty-input" type="number" min="0" step="1"
@@ -472,6 +482,14 @@ function updateQty(cat, i, val) {
   refreshRow(cat, i);
   refreshSectionTotal(cat);
   renderGrand();
+}
+
+function updateName(cat, i, val) {
+  data[cat][i].name = val;
+  save();
+  // print-nameも同期
+  const row = document.getElementById(`row-${i}`);
+  if (row) { const pn = row.querySelector('.print-name'); if (pn) pn.textContent = val; }
 }
 
 function updatePrice(cat, i, val) {
