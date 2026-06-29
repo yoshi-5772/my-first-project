@@ -194,10 +194,15 @@
 
 <header>
   <h1>棚卸し表 — Golot</h1>
-  <div style="display:flex;align-items:center;gap:10px">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
     <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px" onclick="changeMonth(-1)">◀</button>
     <span id="month-label" style="font-size:1rem;font-weight:600;min-width:90px;text-align:center"></span>
     <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px" onclick="changeMonth(1)">▶</button>
+    <button class="btn" style="background:rgba(255,255,255,0.2);color:#fff;padding:5px 10px;font-size:0.8rem" onclick="exportBackup()" title="全データをJSONで保存">💾 バックアップ</button>
+    <label class="btn" style="background:rgba(255,255,255,0.12);color:#fff;padding:5px 10px;font-size:0.8rem;cursor:pointer" title="バックアップから復元">
+      📂 復元<input type="file" accept=".json" style="display:none" onchange="importBackup(this)">
+    </label>
+    <span id="backup-status" style="font-size:0.72rem;opacity:0.75;white-space:nowrap"></span>
   </div>
 </header>
 
@@ -364,7 +369,61 @@ function initMonth(ym) {
   save();
 }
 
-function save() { localStorage.setItem(monthKey(currentMonth), JSON.stringify(data)); }
+// ---- 保存・バックアップ ----
+let _saveTimer = null;
+function save() {
+  const payload = JSON.stringify(data);
+  localStorage.setItem(monthKey(currentMonth), payload);
+  // 自動バックアップ（直近の状態を別キーにも保持）
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    localStorage.setItem('inv_autobk_' + currentMonth, payload);
+    showBackupStatus('自動保存済み ✓');
+  }, 800);
+}
+
+function showBackupStatus(msg) {
+  const el = document.getElementById('backup-status');
+  if (!el) return;
+  el.textContent = msg;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
+function exportBackup() {
+  const out = {};
+  Object.keys(localStorage).filter(k => k.startsWith('inv_') && !k.startsWith('inv_autobk_')).forEach(k => {
+    out[k] = JSON.parse(localStorage.getItem(k));
+  });
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const d = new Date();
+  a.download = `棚卸しバックアップ_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
+  a.click();
+  showBackupStatus('ダウンロード完了 ✓');
+}
+
+function importBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const obj = JSON.parse(e.target.result);
+      let count = 0;
+      Object.keys(obj).forEach(k => {
+        if (k.startsWith('inv_')) { localStorage.setItem(k, JSON.stringify(obj[k])); count++; }
+      });
+      alert(`${count}ヶ月分のデータを復元しました。`);
+      initMonth(currentMonth);
+      renderTabs();
+      renderPanel();
+    } catch { alert('ファイルが壊れています'); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
 
 function latestSavedData() {
   const keys = Object.keys(localStorage)
@@ -515,44 +574,57 @@ function renderPanel() {
   renderGrand();
 }
 
+let _grandTimer = null;
 function renderGrand() {
+  clearTimeout(_grandTimer);
+  _grandTimer = setTimeout(_doRenderGrand, 150);
+}
+function _doRenderGrand() {
   let total = 0, items = 0, qty = 0;
   DATA_CATS.forEach(cat => {
-    data[cat].forEach(x => {
+    (data[cat] || []).forEach(x => {
       total += x.price * x.qty;
       if (x.qty > 0) items++;
       qty += x.qty;
     });
   });
-  document.getElementById('g-total').textContent = Math.round(total).toLocaleString();
-  document.getElementById('g-items').textContent = items;
-  document.getElementById('g-qty').textContent = qty.toLocaleString();
+  const gt = document.getElementById('g-total');
+  const gi = document.getElementById('g-items');
+  const gq = document.getElementById('g-qty');
+  if (gt) gt.textContent = Math.round(total).toLocaleString();
+  if (gi) gi.textContent = items;
+  if (gq) gq.textContent = qty.toLocaleString();
 }
 
+let _qtyTimers = {};
 function updateQty(cat, i, val) {
   data[cat][i].qty = parseFloat(val) || 0;
-  save();
   refreshRow(cat, i);
   refreshSectionTotal(cat);
   renderGrand();
+  clearTimeout(_qtyTimers[i]);
+  _qtyTimers[i] = setTimeout(save, 600);
 }
 
+let _nameTimers = {};
 function updateName(cat, i, val) {
   data[cat][i].name = val;
-  save();
-  // print-nameも同期
   const row = document.getElementById(`row-${i}`);
   if (row) { const pn = row.querySelector('.print-name'); if (pn) pn.textContent = val; }
+  clearTimeout(_nameTimers[i]);
+  _nameTimers[i] = setTimeout(save, 600);
 }
 
+let _priceTimers = {};
 function updatePrice(cat, i, val) {
   const priceEx = parseFloat(val) || 0;
   data[cat][i].priceEx = priceEx;
   data[cat][i].price = tin(priceEx, cat);
-  save();
   refreshRow(cat, i);
   refreshSectionTotal(cat);
   renderGrand();
+  clearTimeout(_priceTimers[i]);
+  _priceTimers[i] = setTimeout(save, 600);
 }
 
 function refreshRow(cat, i) {
