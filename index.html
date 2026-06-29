@@ -186,7 +186,11 @@
 
 <header>
   <h1>棚卸し表 — Golot</h1>
-  <span id="date-label"></span>
+  <div style="display:flex;align-items:center;gap:10px">
+    <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px" onclick="changeMonth(-1)">◀</button>
+    <span id="month-label" style="font-size:1rem;font-weight:600;min-width:90px;text-align:center"></span>
+    <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px" onclick="changeMonth(1)">▶</button>
+  </div>
 </header>
 
 <div class="tabs" id="tabs"></div>
@@ -328,19 +332,35 @@ const RAW = {
 };
 
 let data = {};
+let currentMonth = ''; // 'YYYY-MM'
 
-function initData() {
-  const saved = localStorage.getItem('inv4');
+function monthKey(ym) { return `inv_${ym}`; }
+
+function initMonth(ym) {
+  currentMonth = ym;
+  document.getElementById('month-label').textContent =
+    ym.replace(/^(\d{4})-(\d{2})$/, '$1年$2月');
+  const saved = localStorage.getItem(monthKey(ym));
   if (saved) { data = JSON.parse(saved); return; }
+  // 新しい月は品目リストはそのまま、数量だけ0でスタート
   DATA_CATS.forEach(cat => {
-    data[cat] = RAW[cat].map(([name, unit, priceEx, qty]) => ({
-      name, unit, priceEx, price: tin(priceEx, cat), qty
+    data[cat] = RAW[cat].map(([name, unit, priceEx]) => ({
+      name, unit, priceEx, price: tin(priceEx, cat), qty: 0
     }));
   });
   save();
 }
 
-function save() { localStorage.setItem('inv4', JSON.stringify(data)); }
+function save() { localStorage.setItem(monthKey(currentMonth), JSON.stringify(data)); }
+
+function changeMonth(delta) {
+  const [y, m] = currentMonth.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  initMonth(ym);
+  renderTabs();
+  renderPanel();
+}
 
 let activeTab = 'サマリー';
 
@@ -567,7 +587,7 @@ function downloadCSV() {
   const blob = new Blob([csv], {type:'text/csv'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `棚卸し表_${date}.csv`;
+  a.download = `棚卸し表_${currentMonth}.csv`;
   a.click();
 }
 
@@ -667,10 +687,9 @@ dz.addEventListener('drop', e => {
   }
 });
 
-document.getElementById('date-label').textContent =
-  new Date().toLocaleDateString('ja-JP', {year:'numeric', month:'long', day:'numeric'});
-
-initData();
+const now = new Date();
+const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+initMonth(thisMonth);
 renderTabs();
 renderPanel();
 </script>
