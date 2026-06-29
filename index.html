@@ -342,16 +342,32 @@ function initMonth(ym) {
     ym.replace(/^(\d{4})-(\d{2})$/, '$1年$2月');
   const saved = localStorage.getItem(monthKey(ym));
   if (saved) { data = JSON.parse(saved); return; }
-  // 新しい月は品目リストはそのまま、数量だけ0でスタート
-  DATA_CATS.forEach(cat => {
-    data[cat] = RAW[cat].map(([name, unit, priceEx]) => ({
-      name, unit, priceEx, price: tin(priceEx, cat), qty: 0
-    }));
-  });
+  // 新しい月: 直近の保存済み月から品目・単価を引き継ぎ、数量だけ0にする
+  const prev = latestSavedData();
+  if (prev) {
+    data = {};
+    DATA_CATS.forEach(cat => {
+      data[cat] = (prev[cat] || []).map(x => ({ ...x, qty: 0 }));
+    });
+  } else {
+    DATA_CATS.forEach(cat => {
+      data[cat] = RAW[cat].map(([name, unit, priceEx]) => ({
+        name, unit, priceEx, price: tin(priceEx, cat), qty: 0
+      }));
+    });
+  }
   save();
 }
 
 function save() { localStorage.setItem(monthKey(currentMonth), JSON.stringify(data)); }
+
+function latestSavedData() {
+  const keys = Object.keys(localStorage)
+    .filter(k => k.startsWith('inv_'))
+    .sort().reverse();
+  if (!keys.length) return null;
+  try { return JSON.parse(localStorage.getItem(keys[0])); } catch { return null; }
+}
 
 function changeMonth(delta) {
   const [y, m] = currentMonth.split('-').map(Number);
