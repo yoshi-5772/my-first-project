@@ -207,6 +207,11 @@
       <div id="drop-text">ここをタップして写真を選択<br><small>（納品書・値札・棚の写真など）</small></div>
       <input type="file" id="img-input" accept="image/*" style="display:none" onchange="loadImage(this)">
     </div>
+    <div id="api-key-row" style="display:none;gap:8px;margin-bottom:12px;align-items:center">
+      <input type="password" id="api-key-input" placeholder="Anthropic APIキーを入力（初回のみ）"
+        style="flex:1;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:0.85rem">
+      <small style="color:#888;white-space:nowrap">保存済み</small>
+    </div>
     <div class="ocr-status" id="ocr-status" style="display:none"></div>
     <div class="ocr-result" id="ocr-result" style="display:none"></div>
     <p style="font-size:0.85rem;color:#666;margin-bottom:10px;">読み取り結果を確認して品目・単価を入力してください</p>
@@ -224,7 +229,6 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 const TAX_RATE = {
   '精肉': 1.08, '食材': 1.08, '調味料': 1.08,
@@ -605,6 +609,10 @@ function downloadCSV() {
   a.click();
 }
 
+// ---- APIキー管理 ----
+function getApiKey() { return localStorage.getItem('claude_api_key') || ''; }
+function saveApiKey(k) { localStorage.setItem('claude_api_key', k); }
+
 // ---- OCR ----
 function openOcr() {
   document.getElementById('ocr-cat').textContent = activeTab;
@@ -618,6 +626,14 @@ function openOcr() {
   const old = document.getElementById('drop-zone').querySelector('img');
   if (old) old.remove();
   document.getElementById('img-input').value = '';
+
+  // APIキー未設定なら入力欄を表示
+  const keyRow = document.getElementById('api-key-row');
+  if (!getApiKey()) {
+    keyRow.style.display = 'flex';
+  } else {
+    keyRow.style.display = 'none';
+  }
   document.getElementById('ocr-modal').classList.add('open');
 }
 
@@ -646,30 +662,82 @@ async function runOcr(src) {
   const status = document.getElementById('ocr-status');
   const result = document.getElementById('ocr-result');
   status.style.display = 'block';
-  status.textContent = '読み取り中...';
+  status.textContent = 'Claude AIで読み取り中...';
   result.style.display = 'none';
+
+  // APIキーを保存
+  const keyInput = document.getElementById('api-key-input');
+  if (keyInput && keyInput.value.trim()) saveApiKey(keyInput.value.trim());
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    status.textContent = 'APIキーを入力してください';
+    status.style.background = '#fef2f2';
+    status.style.color = '#991b1b';
+    return;
+  }
+
+  // base64部分だけ取り出す
+  const base64 = src.split(',')[1];
+  const mediaType = src.split(';')[0].split(':')[1];
+
   try {
-    const { data: { text } } = await Tesseract.recognize(src, 'jpn+eng', {
-      logger: m => {
-        if (m.status === 'recognizing text') {
-          status.textContent = `読み取り中... ${Math.round(m.progress*100)}%`;
-        }
-      }
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: mediaType, data: base64 }
+            },
+            {
+              type: 'text',
+              text: `この画像は店舗の納品書・請求書・値札などです。
+画像から品名と価格（税抜き単価）を読み取ってください。
+複数ある場合は最初の1つだけ返してください。
+以下のJSON形式のみで返答してください（説明不要）:
+{"name":"品名","unit":"単位(k/本/p/個など)","price":数値}`
+            }
+          ]
+        }]
+      })
     });
-    status.textContent = '読み取り完了。内容を確認して品目・単価を入力してください。';
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || res.status);
+    }
+
+    const json = await res.json();
+    const text = json.content[0].text.trim();
     result.style.display = 'block';
     result.textContent = text;
 
-    // 数字っぽいものを価格候補として自動入力
-    const prices = text.match(/[\d,]+円|¥[\d,]+|[\d]{3,6}/g);
-    if (prices) {
-      const num = prices[prices.length-1].replace(/[円¥,]/g,'');
-      if (!isNaN(num) && num > 0) {
-        document.getElementById('ocr-price').value = num;
-      }
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.name) document.getElementById('ocr-name').value = parsed.name;
+      if (parsed.unit) document.getElementById('ocr-unit').value = parsed.unit;
+      if (parsed.price) document.getElementById('ocr-price').value = parsed.price;
+      status.textContent = '読み取り完了！内容を確認して追加してください。';
+      status.style.background = '#f0fdf4';
+      status.style.color = '#166534';
+    } catch {
+      status.textContent = '読み取り完了。内容を確認して入力してください。';
     }
   } catch(e) {
-    status.textContent = '読み取りに失敗しました。手動で入力してください。';
+    status.textContent = `エラー: ${e.message}`;
+    status.style.background = '#fef2f2';
+    status.style.color = '#991b1b';
   }
 }
 
