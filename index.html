@@ -353,24 +353,14 @@ function initMonth(ym) {
     // 保存データが空（品目0件）の場合はRAWで再初期化
     const hasItems = DATA_CATS.some(cat => data[cat] && data[cat].length > 0);
     if (hasItems) return;
+    localStorage.removeItem(monthKey(ym)); // 壊れたデータを削除
   }
-  // 新しい月: 直近の保存済み月から品目・単価を引き継ぎ、数量だけ0にする
-  const prev = latestSavedData();
-  if (prev) {
-    data = {};
-    DATA_CATS.forEach(cat => {
-      data[cat] = (prev[cat] || []).map(x => ({
-        ...x,
-        priceEx: x.priceEx != null ? x.priceEx : Math.round(x.price / (TAX_RATE[cat] || 1.10))
-      }));
-    });
-  } else {
-    DATA_CATS.forEach(cat => {
-      data[cat] = RAW[cat].map(([name, unit, priceEx, qty]) => ({
-        name, unit, priceEx, price: tin(priceEx, cat), qty
-      }));
-    });
-  }
+  // RAWデータで初期化
+  DATA_CATS.forEach(cat => {
+    data[cat] = RAW[cat].map(([name, unit, priceEx, qty]) => ({
+      name, unit, priceEx, price: tin(priceEx, cat), qty
+    }));
+  });
   save();
 }
 
