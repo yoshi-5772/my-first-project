@@ -724,7 +724,8 @@ async function runOcr(src) {
     result.textContent = text;
 
     try {
-      const parsed = JSON.parse(text);
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
       if (parsed.name) document.getElementById('ocr-name').value = parsed.name;
       if (parsed.unit) document.getElementById('ocr-unit').value = parsed.unit;
       if (parsed.price) document.getElementById('ocr-price').value = parsed.price;
