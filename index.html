@@ -341,13 +341,26 @@ function initMonth(ym) {
   document.getElementById('month-label').textContent =
     ym.replace(/^(\d{4})-(\d{2})$/, '$1年$2月');
   const saved = localStorage.getItem(monthKey(ym));
-  if (saved) { data = JSON.parse(saved); return; }
+  if (saved) {
+    data = JSON.parse(saved);
+    // priceExがない古いデータをマイグレーション
+    DATA_CATS.forEach(cat => {
+      data[cat] = (data[cat] || []).map(x => ({
+        ...x,
+        priceEx: x.priceEx != null ? x.priceEx : Math.round(x.price / (TAX_RATE[cat] || 1.10))
+      }));
+    });
+    return;
+  }
   // 新しい月: 直近の保存済み月から品目・単価を引き継ぎ、数量だけ0にする
   const prev = latestSavedData();
   if (prev) {
     data = {};
     DATA_CATS.forEach(cat => {
-      data[cat] = (prev[cat] || []).map(x => ({ ...x }));
+      data[cat] = (prev[cat] || []).map(x => ({
+        ...x,
+        priceEx: x.priceEx != null ? x.priceEx : Math.round(x.price / (TAX_RATE[cat] || 1.10))
+      }));
     });
   } else {
     DATA_CATS.forEach(cat => {
