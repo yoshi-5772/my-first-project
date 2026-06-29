@@ -347,12 +347,12 @@ function initMonth(ym) {
   if (prev) {
     data = {};
     DATA_CATS.forEach(cat => {
-      data[cat] = (prev[cat] || []).map(x => ({ ...x, qty: 0 }));
+      data[cat] = (prev[cat] || []).map(x => ({ ...x }));
     });
   } else {
     DATA_CATS.forEach(cat => {
-      data[cat] = RAW[cat].map(([name, unit, priceEx]) => ({
-        name, unit, priceEx, price: tin(priceEx, cat), qty: 0
+      data[cat] = RAW[cat].map(([name, unit, priceEx, qty]) => ({
+        name, unit, priceEx, price: tin(priceEx, cat), qty
       }));
     });
   }
