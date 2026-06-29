@@ -3,254 +3,414 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>棚卸し表</title>
+  <title>棚卸し表 — Golot</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+    body { font-family: 'Segoe UI', 'Hiragino Sans', sans-serif; background: #f0f2f0; color: #222; font-size: 14px; }
 
     header {
-      background: #2c7a4b;
-      color: white;
-      padding: 16px 24px;
+      background: #1e5631;
+      color: #fff;
+      padding: 14px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    header h1 { font-size: 1.4rem; }
+    header h1 { font-size: 1.2rem; font-weight: 700; }
+    header span { font-size: 0.85rem; opacity: 0.8; }
 
-    .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
-
-    .card {
-      background: white;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-      margin-bottom: 20px;
-    }
-
-    .card h2 { font-size: 1rem; margin-bottom: 14px; color: #555; }
-
-    .form-row {
+    .tabs {
+      background: #2c7a4b;
       display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
+      gap: 2px;
+      padding: 0 16px;
+      overflow-x: auto;
     }
-    .form-row input {
-      flex: 1;
-      min-width: 140px;
-      padding: 10px 12px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      font-size: 1rem;
-    }
-    .form-row input:focus { outline: none; border-color: #2c7a4b; }
-
-    button {
+    .tab {
       padding: 10px 18px;
-      border: none;
-      border-radius: 6px;
       cursor: pointer;
-      font-size: 0.95rem;
+      color: rgba(255,255,255,0.7);
+      font-size: 0.9rem;
+      white-space: nowrap;
+      border-bottom: 3px solid transparent;
+      transition: all .15s;
     }
-    .btn-add { background: #2c7a4b; color: white; }
-    .btn-add:hover { background: #235f3a; }
-    .btn-csv { background: #1a6fa8; color: white; }
-    .btn-csv:hover { background: #155a8a; }
-    .btn-delete { background: transparent; color: #e53e3e; border: 1px solid #e53e3e; padding: 5px 10px; font-size: 0.85rem; }
-    .btn-delete:hover { background: #fff5f5; }
-    .btn-edit { background: transparent; color: #2c7a4b; border: 1px solid #2c7a4b; padding: 5px 10px; font-size: 0.85rem; }
-    .btn-edit:hover { background: #f0fff4; }
-    .btn-save { background: #2c7a4b; color: white; padding: 5px 10px; font-size: 0.85rem; }
+    .tab:hover { color: #fff; }
+    .tab.active { color: #fff; border-bottom-color: #7dda9e; font-weight: 600; }
+
+    .container { max-width: 960px; margin: 20px auto; padding: 0 14px; }
+
+    .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.1); margin-bottom: 16px; overflow: hidden; }
+
+    .card-header {
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #eee;
+    }
+    .card-header h2 { font-size: 1rem; color: #1e5631; }
+
+    .form-row { display: flex; gap: 8px; flex-wrap: wrap; padding: 14px 18px; background: #f9fdf9; border-bottom: 1px solid #eee; }
+    .form-row input, .form-row select {
+      flex: 1; min-width: 100px;
+      padding: 8px 10px;
+      border: 1px solid #ccc; border-radius: 5px;
+      font-size: 0.9rem;
+    }
+    .form-row input:focus, .form-row select:focus { outline: none; border-color: #2c7a4b; }
 
     table { width: 100%; border-collapse: collapse; }
     thead th {
-      background: #f0f4f0;
-      padding: 10px 12px;
+      background: #f4f7f4;
+      padding: 9px 12px;
       text-align: left;
-      font-size: 0.9rem;
-      color: #555;
-      border-bottom: 2px solid #ddd;
+      font-size: 0.8rem;
+      color: #666;
+      border-bottom: 1px solid #e0e0e0;
+      white-space: nowrap;
     }
-    tbody tr { border-bottom: 1px solid #eee; }
-    tbody tr:hover { background: #fafafa; }
-    tbody td { padding: 10px 12px; font-size: 0.95rem; }
-    tbody td input {
-      width: 100%;
-      padding: 5px 8px;
-      border: 1px solid #2c7a4b;
-      border-radius: 4px;
-      font-size: 0.95rem;
+    thead th.right { text-align: right; }
+    tbody tr { border-bottom: 1px solid #f0f0f0; }
+    tbody tr:hover { background: #fafff9; }
+    tbody td { padding: 8px 12px; font-size: 0.9rem; }
+    tbody td.right { text-align: right; }
+    tbody td.muted { color: #aaa; }
+
+    .qty-input {
+      width: 70px; padding: 5px 7px;
+      border: 1px solid #ccc; border-radius: 4px;
+      text-align: right; font-size: 0.9rem;
+    }
+    .qty-input:focus { outline: none; border-color: #2c7a4b; }
+
+    .btn { padding: 7px 14px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85rem; }
+    .btn-green { background: #2c7a4b; color: #fff; }
+    .btn-green:hover { background: #1e5631; }
+    .btn-blue { background: #1a6fa8; color: #fff; }
+    .btn-blue:hover { background: #145880; }
+    .btn-sm { padding: 4px 9px; font-size: 0.8rem; }
+    .btn-del { background: none; border: 1px solid #e53e3e; color: #e53e3e; border-radius: 4px; padding: 3px 8px; font-size: 0.78rem; cursor: pointer; }
+    .btn-del:hover { background: #fff5f5; }
+
+    .section-total {
+      display: flex; justify-content: flex-end;
+      gap: 24px; padding: 12px 18px;
+      background: #f4f7f4; border-top: 1px solid #e0e0e0;
+      font-size: 0.9rem; color: #444;
+    }
+    .section-total strong { color: #1e5631; font-size: 1rem; }
+
+    .grand-summary {
+      background: #1e5631; color: #fff;
+      border-radius: 8px; padding: 18px 22px;
+      display: flex; justify-content: space-between;
+      align-items: center; flex-wrap: wrap; gap: 12px;
+    }
+    .grand-summary .items { display: flex; gap: 28px; font-size: 0.9rem; opacity: .85; }
+    .grand-total { font-size: 1.5rem; font-weight: 700; }
+
+    .tax-badge {
+      display: inline-block; font-size: 0.7rem;
+      background: #e8f5e9; color: #1e5631;
+      border: 1px solid #a5d6a7; border-radius: 3px;
+      padding: 1px 4px; margin-left: 4px; vertical-align: middle;
     }
 
-    .actions { display: flex; gap: 6px; }
+    .top-btns { display: flex; gap: 8px; }
 
-    .summary {
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      gap: 20px;
-      flex-wrap: wrap;
+    @media (max-width: 600px) {
+      thead th:nth-child(3), tbody td:nth-child(3) { display: none; }
     }
-    .summary-item { font-size: 0.9rem; color: #555; }
-    .summary-total { font-size: 1.2rem; font-weight: bold; color: #2c7a4b; }
-
-    .empty { text-align: center; color: #aaa; padding: 40px; font-size: 0.95rem; }
-
-    .top-actions { display: flex; gap: 10px; justify-content: flex-end; margin-bottom: 12px; }
   </style>
 </head>
 <body>
 
 <header>
-  <h1>棚卸し表</h1>
+  <h1>棚卸し表 — Golot</h1>
   <span id="date-label"></span>
 </header>
 
-<div class="container">
-  <div class="card">
-    <h2>商品を追加</h2>
-    <div class="form-row">
-      <input type="text" id="input-name" placeholder="品名" />
-      <input type="number" id="input-price" placeholder="単価（円）" min="0" />
-      <input type="number" id="input-qty" placeholder="数量" min="1" value="1" />
-      <button class="btn-add" onclick="addItem()">追加</button>
-    </div>
-  </div>
+<div class="tabs" id="tabs"></div>
 
-  <div class="card">
-    <div class="top-actions">
-      <button class="btn-csv" onclick="downloadCSV()">CSVダウンロード</button>
+<div class="container">
+  <div id="panel"></div>
+
+  <div class="grand-summary" id="grand-summary">
+    <div class="items">
+      <div>品目数: <strong id="g-items">0</strong> 種</div>
+      <div>合計数量: <strong id="g-qty">0</strong></div>
     </div>
-    <table>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>品名</th>
-          <th>単価（円）</th>
-          <th>数量</th>
-          <th>小計（円）</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody id="item-list"></tbody>
-    </table>
-    <div id="empty" class="empty">商品がまだありません</div>
-    <div style="margin-top:16px;" class="summary">
-      <div class="summary-item">合計点数: <strong id="total-qty">0</strong> 点</div>
-      <div class="summary-item">品目数: <strong id="total-items">0</strong> 種</div>
-      <div class="summary-total">合計金額: ¥<span id="total-price">0</span></div>
-    </div>
+    <div class="grand-total">合計 ¥<span id="g-total">0</span>（税込）</div>
   </div>
 </div>
 
 <script>
-  let items = JSON.parse(localStorage.getItem('inventory') || '[]');
+// 軽減税率: 食料品=8%, 酒類・備品=10%
+const TAX_RATE = {
+  '精肉': 1.08,
+  '食材': 1.08,
+  '調味料': 1.08,
+  '酒/飲材': 1.10,
+  '備品/包材': 1.10
+};
+const tin = (p, cat) => Math.round(p * (TAX_RATE[cat] || 1.10));
 
-  document.getElementById('date-label').textContent = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' });
+const CATEGORIES = ['精肉','食材','調味料','酒/飲材','備品/包材'];
 
-  function save() {
-    localStorage.setItem('inventory', JSON.stringify(items));
+const RAW = {
+  '精肉': [
+    ['ヒレ','k',7344,0],['内腿','k',4320,2],['腕三角','k',4752,3],['サーロイン','k',8424,4],
+    ['ハト','k',2160,0],['牛挽肉','k',1512,4],['ランイチ','k',4752,0],['モモ材','k',3564,0],
+    ['カメノコ','k',4320,0],['サーロインステーキカット','枚',1980,0],['イチボ','k',3780,0],
+    ['ローストビーフ','k',3300,0],['牛串','本',540,0],['ハツ','k',864,0],
+    ['生ハムユッケ','個',500,0],['ヒレカット','枚',1500,0],['牛すじ','k',1080,0],
+    ['シキンボ','k',2376,0],['トウガラシ','k',2376,0],['千本筋','k',1836,0],
+    ['ランプ','k',3564,0],['豚挽き','k',972,1],['ナカ肉','k',3564,0],
+    ['牛骨','k',108,0],['ハチノス','k',1320,0],['生ハム','k',8000,0],['シンタマ','k',4320,7]
+  ],
+  '食材': [
+    ['米','k',630,20],['卵','cs',4400,1],['バニラ','p',1595,0.4],['牛乳','本',300,1],
+    ['マッシュルーム','p',280,1],['玉ねぎ','k',280,1],['人参','k',350,1],['セロリ','束',950,1],
+    ['ミニトマト','p',280,1],['グリーンカール','束',180,3],['デミグラス','ℓ',3000,6],
+    ['フォンドボー','ℓ',2759,0],['ステーキソース','ℓ',512,5],['カレーソース','ℓ',800,1],
+    ['コンソメ','ℓ',1000,5],['トリッパ','p',200,25],['赤ワインソース','ℓ',3800,1],
+    ['白ワインソース','ℓ',2100,1],['ロイヤルソース','ℓ',3500,0.1],['白ドレ','ℓ',440,2],
+    ['フレンチドレッシング','ℓ',490,3],['ブルゴーニュバター','k',2481,0.5],
+    ['ブールマニエ','k',832,0.4],['とり','p',1512,1],['グレビーソース','ℓ',2500,0],
+    ['コーヒー','個',67,120],['紅茶','p',915,1],['エシャロット','k',950,0],
+    ['ハンバーグ','k',1400,5],['シチュー','p',380,0],['砂肝','k',600,0],
+    ['テリーヌ','本',1200,1],['ジュース','本',70,0],['カツレツ','枚',350,5],
+    ['ポタージュ','ℓ',950,1],['マディラソース','ℓ',3500,0],['根生姜','k',1800,0.2],
+    ['カマンベール','個',580,2],['クリーミーウォッシュ','個',620,2],['メガクランチ','p',880,1],
+    ['とりもも','k',1512,2],['シーザードレ','p',600,1],['つぶ貝','p',3600,0],
+    ['アールグレイ','p',845,0],['大根','本',360,0],['りんご','個',200,0],
+    ['長ネギ','本',140,0],['生姜','p',200,0],['タイム','p',350,0],['しめじ','p',260,0],
+    ['トレビス','個',750,0],['むき海老','p',1980,0],['グリュイエール100g','p',680,2],
+    ['パン粉 2k','p',850,1],['レフォール','p',260,1],['クーベルチュール','k',3980,0.5],
+    ['ゆずソルベ','p',1275,0.4],['タラゴン','本',940,1],['カボチャp 500g','p',635,0],
+    ['パイン缶','本',210,0],['片栗粉 1k','p',470,1],['マドラスカレー1k','p',1670,1],
+    ['パルミジャーノ100g','p',530,1],['タラノメ','p',626,0],['トリュフ','g',2450,0],
+    ['フォアグラ','k',8900,0.1],['冷凍ストロベリー','k',990,0],['凍結卵白 1.8k','本',1100,0],
+    ['ベイリーブス30g','p',300,1],['パイシート','枚',70,0],['バター','個',915,1],
+    ['ニンニク','k',800,0.2],['エリンギ','p',150,0]
+  ],
+  '調味料': [
+    ['醤油','本',505,2],['みりん','本',945,1],['清酒','本',945,1],['味ぽん','本',1000,1],
+    ['そばつゆ','本',1285,1],['酢','本',465,2],['クランデール','本',1680,3],
+    ['三温糖','k',375,1],['ウスターソース1.8ℓ','本',710,1],['マスタード','本',880,1],
+    ['グラニュー糖','k',312,2],['塩','k',195,1],['白胡椒','本',1840,0],['黒胡椒','本',1280,1],
+    ['ナツメグ','本',2650,0.4],['チリペッパー','本',865,0.1],['カレー粉','本',1240,0.3],
+    ['ガラムマサラ','本',900,0.4],['パセぽん','本',640,0],['クォーターエピス','本',880,0.3],
+    ['コリアンダー','本',640,0.4],['ケチャップ1k','本',447,2],['サラダ油','缶',7300,1],
+    ['トマトソース','本',1710,1],['ブイヨン','本',906,0],['マヨネーズ','本',420,0],
+    ['カイエンペッパー','本',980,0.3],['フォンドボー(p)','p',2750,0],['グリーンペッパー','本',828,1],
+    ['無塩バター','本',915,1],['クローブス','p',580,1],['チキンコンソメ','本',2288,0.4],
+    ['粉糖','k',420,0],['カメリヤ','k',368,1],['ゼラチン','p',1500,0],
+    ['上白糖','p',310,0],['ホワイトpホール','p',525,4],['ピンクp','本',1725,0],
+    ['オリーブオイル','本',2900,0.7],['グリーンp','p',940,0],
+    ['ガムシロ','p',398,0],['スティックシュガー','p',398,1],['薄口醤油','本',720,1],
+    ['ポーションミルク50個','p',257,1],['マルドン','p',890,2],['ブラックpホール100g','p',280,1],
+    ['コンデンスミルク480g','本',600,0],['十勝クリーム','本',1250,0],
+    ['ごま油','本',2090,0.2],['和三盆500g','p',1100,1]
+  ],
+  '酒/飲材': [
+    ['エーデルピルス','本',6200,1],['プレミアムフリー','本',265,6],['コーラ','本',128,4],
+    ['ジンジャーエール','本',115,6],['トニックウォーター','本',127,4],['プレミアムソーダ','本',147,8],
+    ['烏龍茶','本',170,2],['純','本',1393,2],['いいちこ','本',899,0.5],
+    ['デュワーズ','本',1500,1],['残波','本',1141,0.4],['梅酒','本',1280,1],
+    ['スパークリング','本',1400,2],['シュバルツ','本',366,6],['マルゴー','本',44000,0],
+    ['響','本',15000,0.4],['竹鶴','本',7700,0.4],['赤ワイン','本',1600,23],
+    ['白ワイン','本',1600,6],['ロゼワイン','本',1600,1],['シェリー','本',2320,1],
+    ['ポート','本',2300,0.3],['マデラ','本',2480,0.2],['vo','本',900,0.3],
+    ['焼酎甲類','本',630,1],['カシス','本',1670,0.4],['ウォッカ','本',1060,0.4],
+    ['アマレット','本',1646,0.5],['ガス','本',2350,0.3],['ヒドゥンポスト','本',2469,2],
+    ['生搾り','本',4700,1],['マッカラン','本',8800,0.5],['ピーチシロップ','本',1400,0.4],
+    ['ピーチツリー','本',1400,0.6],['雪の茅舎','本',1335,0],['ボンベイジン','本',1860,0.4],
+    ['オレンジワイン','本',750,2],['二兎','本',2000,0],['はちみつゆずサワー','本',1500,0],
+    ['アイスティー','本',265,3],['アイスコーヒー','本',265,3],['赤兎馬','本',1661,0.4],
+    ['ウィルキンソン','本',86,8],['いいちこsp','本',2309,0.4]
+  ],
+  '備品/包材': [
+    ['ラテックス手袋','p',500,9],['アイラップ','p',618,1],['ハイポリ','p',618,0],
+    ['ナイロンポリ','p',2645,0],['セスキ','p',400,0],['重曹','p',406,0],
+    ['パフォーミー','本',1441,1],['ビオレアルコール','本',397,1],['ハイター','本',1150,0.3],
+    ['パワークリーナー','本',2295,0.3],['ユービノロ','本',2140,0],['スポンジ','p',180,1],
+    ['たわし','p',348,1],['カップクリーン','p',500,1],['トイレクイックル','p',291,1],
+    ['弁当箱','個',42,100],['弁当袋','枚',12,80],['ラップ','本',300,2],
+    ['アルミホイル','本',400,1],['フリーザーバッグ','本',690,1],['ティッシュ','箱',72,5],
+    ['トイレットペーパー','本',43,8],['割り箸','p',525,3],['信越ポリマー','p',2100,1],
+    ['キッチンペーパー','p',698,6],['カレー容器','p',56,15],['炭','cs',1680,0],
+    ['フードパック','p',748,3],['スプーン','p',715,0],['門崎弁当箱','p',82,100],
+    ['門崎紙','枚',18,15],['谷地炭','cs',3300,0.4],['クッキングシート','本',525,1],
+    ['おしぼり','本',16.5,40],['花王ファミリーフレッシュ','本',1800,0]
+  ]
+};
+
+let data = {};
+
+function initData() {
+  const saved = localStorage.getItem('inv3');
+  if (saved) {
+    data = JSON.parse(saved);
+    return;
   }
+  CATEGORIES.forEach(cat => {
+    data[cat] = RAW[cat].map(([name, unit, priceEx, qty]) => ({
+      name, unit,
+      priceEx,
+      price: tin(priceEx, cat),
+      qty
+    }));
+  });
+  save();
+}
 
-  function render() {
-    const tbody = document.getElementById('item-list');
-    const empty = document.getElementById('empty');
-    tbody.innerHTML = '';
+function save() { localStorage.setItem('inv3', JSON.stringify(data)); }
 
-    if (items.length === 0) {
-      empty.style.display = 'block';
-    } else {
-      empty.style.display = 'none';
-      items.forEach((item, i) => {
-        const tr = document.createElement('tr');
-        if (item.editing) {
-          tr.innerHTML = `
-            <td>${i + 1}</td>
-            <td><input type="text" id="e-name-${i}" value="${item.name}" /></td>
-            <td><input type="number" id="e-price-${i}" value="${item.price}" min="0" /></td>
-            <td><input type="number" id="e-qty-${i}" value="${item.qty}" min="1" /></td>
-            <td>—</td>
-            <td class="actions">
-              <button class="btn-save" onclick="saveEdit(${i})">保存</button>
-            </td>
-          `;
-        } else {
-          const subtotal = item.price * item.qty;
-          tr.innerHTML = `
-            <td>${i + 1}</td>
-            <td>${item.name}</td>
-            <td>¥${item.price.toLocaleString()}</td>
-            <td>${item.qty}</td>
-            <td>¥${subtotal.toLocaleString()}</td>
-            <td class="actions">
-              <button class="btn-edit" onclick="startEdit(${i})">編集</button>
-              <button class="btn-delete" onclick="deleteItem(${i})">削除</button>
-            </td>
-          `;
-        }
-        tbody.appendChild(tr);
-      });
-    }
+let activeTab = '精肉';
 
-    const totalQty = items.reduce((s, x) => s + x.qty, 0);
-    const totalPrice = items.reduce((s, x) => s + x.price * x.qty, 0);
-    document.getElementById('total-qty').textContent = totalQty.toLocaleString();
-    document.getElementById('total-items').textContent = items.length;
-    document.getElementById('total-price').textContent = totalPrice.toLocaleString();
-  }
+function renderTabs() {
+  const el = document.getElementById('tabs');
+  el.innerHTML = CATEGORIES.map(c =>
+    `<div class="tab ${c===activeTab?'active':''}" onclick="switchTab('${c}')">${c}</div>`
+  ).join('');
+}
 
-  function addItem() {
-    const name = document.getElementById('input-name').value.trim();
-    const price = parseInt(document.getElementById('input-price').value);
-    const qty = parseInt(document.getElementById('input-qty').value) || 1;
-    if (!name || isNaN(price)) { alert('品名と単価を入力してください'); return; }
-    items.push({ name, price, qty, editing: false });
-    document.getElementById('input-name').value = '';
-    document.getElementById('input-price').value = '';
-    document.getElementById('input-qty').value = '1';
-    save(); render();
-  }
+function switchTab(cat) {
+  activeTab = cat;
+  renderTabs();
+  renderPanel();
+}
 
-  function deleteItem(i) {
-    if (!confirm(`「${items[i].name}」を削除しますか？`)) return;
-    items.splice(i, 1);
-    save(); render();
-  }
+function renderPanel() {
+  const items = data[activeTab];
+  const totalAmt = items.reduce((s,x) => s + x.price * x.qty, 0);
+  const totalQty = items.reduce((s,x) => s + x.qty, 0);
 
-  function startEdit(i) {
-    items[i].editing = true;
-    render();
-  }
+  let rows = items.map((item, i) => {
+    const sub = item.price * item.qty;
+    return `<tr>
+      <td>${item.name}</td>
+      <td class="muted">${item.unit}</td>
+      <td class="right">¥${item.price.toLocaleString()}</td>
+      <td class="right">
+        <input class="qty-input" type="number" min="0" step="0.1"
+          value="${item.qty}" onchange="updateQty('${activeTab}',${i},this.value)">
+      </td>
+      <td class="right">${sub>0 ? '¥'+Math.round(sub).toLocaleString() : '<span class="muted">—</span>'}</td>
+      <td><button class="btn-del" onclick="delItem('${activeTab}',${i})">削除</button></td>
+    </tr>`;
+  }).join('');
 
-  function saveEdit(i) {
-    const name = document.getElementById(`e-name-${i}`).value.trim();
-    const price = parseInt(document.getElementById(`e-price-${i}`).value);
-    const qty = parseInt(document.getElementById(`e-qty-${i}`).value) || 1;
-    if (!name || isNaN(price)) { alert('品名と単価を入力してください'); return; }
-    items[i] = { name, price, qty, editing: false };
-    save(); render();
-  }
+  document.getElementById('panel').innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <h2>${activeTab}</h2>
+        <div class="top-btns">
+          <button class="btn btn-blue" onclick="downloadCSV()">CSVダウンロード</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <input type="text" id="f-name" placeholder="品名" />
+        <input type="text" id="f-unit" placeholder="単位" style="max-width:70px" />
+        <input type="number" id="f-price" placeholder="単価（税抜）" min="0" />
+        <input type="number" id="f-qty" placeholder="数量" min="0" step="0.1" value="1" />
+        <button class="btn btn-green" onclick="addItem()">追加</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>品名</th>
+            <th>単位</th>
+            <th class="right">単価（税込）<span class="tax-badge">${TAX_RATE[activeTab]===1.08?'8%':'10%'}込</span></th>
+            <th class="right">数量</th>
+            <th class="right">小計（税込）</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="section-total">
+        <span>点数: <strong>${totalQty.toLocaleString()}</strong></span>
+        <span>小計: <strong>¥${Math.round(totalAmt).toLocaleString()}</strong></span>
+      </div>
+    </div>`;
 
-  function downloadCSV() {
-    const date = new Date().toLocaleDateString('ja-JP').replace(/\//g, '-');
-    let csv = '﻿品名,単価（円）,数量,小計（円）\n';
-    items.forEach(item => {
-      csv += `"${item.name}",${item.price},${item.qty},${item.price * item.qty}\n`;
+  renderGrand();
+}
+
+function renderGrand() {
+  let total = 0, items = 0, qty = 0;
+  CATEGORIES.forEach(cat => {
+    data[cat].forEach(x => {
+      total += x.price * x.qty;
+      if (x.qty > 0) items++;
+      qty += x.qty;
     });
-    const total = items.reduce((s, x) => s + x.price * x.qty, 0);
-    csv += `合計,,,${total}\n`;
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `棚卸し表_${date}.csv`;
-    a.click();
-  }
+  });
+  document.getElementById('g-total').textContent = Math.round(total).toLocaleString();
+  document.getElementById('g-items').textContent = items;
+  document.getElementById('g-qty').textContent = qty.toLocaleString();
+}
 
-  document.getElementById('input-qty').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
-  document.getElementById('input-price').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('input-qty').focus(); });
-  document.getElementById('input-name').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('input-price').focus(); });
+function updateQty(cat, i, val) {
+  data[cat][i].qty = parseFloat(val) || 0;
+  save();
+  renderGrand();
+  // update section total only
+  const items = data[cat];
+  const totalAmt = items.reduce((s,x) => s + x.price * x.qty, 0);
+  const totalQty = items.reduce((s,x) => s + x.qty, 0);
+  document.querySelector('.section-total').innerHTML =
+    `<span>点数: <strong>${totalQty.toLocaleString()}</strong></span>
+     <span>小計: <strong>¥${Math.round(totalAmt).toLocaleString()}</strong></span>`;
+}
 
-  render();
+function addItem() {
+  const name = document.getElementById('f-name').value.trim();
+  const unit = document.getElementById('f-unit').value.trim() || '—';
+  const priceEx = parseFloat(document.getElementById('f-price').value);
+  const qty = parseFloat(document.getElementById('f-qty').value) || 0;
+  if (!name || isNaN(priceEx)) { alert('品名と単価を入力してください'); return; }
+  data[activeTab].push({ name, unit, priceEx, price: tin(priceEx, activeTab), qty });
+  save();
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-price').value = '';
+  document.getElementById('f-qty').value = '1';
+  renderPanel();
+}
+
+function delItem(cat, i) {
+  if (!confirm(`「${data[cat][i].name}」を削除しますか？`)) return;
+  data[cat].splice(i, 1);
+  save();
+  renderPanel();
+}
+
+function downloadCSV() {
+  const date = new Date().toLocaleDateString('ja-JP').replace(/\//g,'-');
+  let csv = '﻿部門,品名,単位,単価（税込）,数量,小計（税込）\n';
+  CATEGORIES.forEach(cat => {
+    data[cat].forEach(x => {
+      csv += `"${cat}","${x.name}","${x.unit}",${x.price},${x.qty},${Math.round(x.price*x.qty)}\n`;
+    });
+  });
+  const grand = CATEGORIES.flatMap(c=>data[c]).reduce((s,x)=>s+x.price*x.qty,0);
+  csv += `,,,,合計（税込）,${Math.round(grand)}\n`;
+  const blob = new Blob([csv],{type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `棚卸し表_${date}.csv`;
+  a.click();
+}
+
+document.getElementById('date-label').textContent =
+  new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
+
+initData();
+renderTabs();
+renderPanel();
 </script>
 </body>
 </html>
