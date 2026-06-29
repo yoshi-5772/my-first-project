@@ -350,7 +350,9 @@ function initMonth(ym) {
         priceEx: x.priceEx != null ? x.priceEx : Math.round(x.price / (TAX_RATE[cat] || 1.10))
       }));
     });
-    return;
+    // 保存データが空（品目0件）の場合はRAWで再初期化
+    const hasItems = DATA_CATS.some(cat => data[cat] && data[cat].length > 0);
+    if (hasItems) return;
   }
   // 新しい月: 直近の保存済み月から品目・単価を引き継ぎ、数量だけ0にする
   const prev = latestSavedData();
