@@ -178,10 +178,13 @@
     .btn-gray:hover { background: #d1d5db; }
 
     .print-name { display: none; }
+    .print-val { display: none; }
     @media print {
-      header, .tabs, .form-row, .top-btns, .btn, .btn-del, .qty-input, .name-input, .modal-bg { display: none !important; }
+      header, .tabs, .form-row, .top-btns, .btn, .btn-del, .modal-bg { display: none !important; }
       small { display: none !important; }
       .print-name { display: inline !important; }
+      .print-val { display: inline !important; }
+      .name-input, .qty-input { display: none !important; }
       .container { margin: 0; padding: 0; }
       .card { box-shadow: none; border: 1px solid #ccc; }
     }
@@ -459,10 +462,12 @@ function renderPanel() {
           value="${item.priceEx}" oninput="updatePrice('${cat}',${i},this.value)"
           style="width:90px;text-align:right">
         <small class="muted"> →¥${item.price.toLocaleString()}</small>
+        <span class="print-val">¥${item.price.toLocaleString()}</span>
       </td>
       <td class="right">
         <input class="qty-input" type="number" min="0" step="0.1"
           value="${item.qty}" oninput="updateQty('${cat}',${i},this.value)">
+        <span class="print-val">${item.qty}</span>
       </td>
       <td class="right" id="sub-${i}">${sub>0 ? '¥'+Math.round(sub).toLocaleString() : '<span class="muted">—</span>'}</td>
       <td><button class="btn-del" onclick="delItem('${cat}',${i})">削除</button></td>
@@ -555,11 +560,13 @@ function refreshRow(cat, i) {
   const sub = item.price * item.qty;
   const subEl = document.getElementById(`sub-${i}`);
   if (subEl) subEl.innerHTML = sub > 0 ? '¥' + Math.round(sub).toLocaleString() : '<span class="muted">—</span>';
-  // 税込表示を更新
   const row = document.getElementById(`row-${i}`);
   if (row) {
     const small = row.querySelector('small');
     if (small) small.textContent = ` →¥${item.price.toLocaleString()}`;
+    const pvs = row.querySelectorAll('.print-val');
+    if (pvs[0]) pvs[0].textContent = `¥${item.price.toLocaleString()}`;
+    if (pvs[1]) pvs[1].textContent = item.qty;
   }
 }
 
