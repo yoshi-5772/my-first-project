@@ -399,15 +399,20 @@ function renderPanel() {
 
   const rows = items.map((item, i) => {
     const sub = item.price * item.qty;
-    return `<tr>
+    return `<tr id="row-${i}">
       <td>${item.name}</td>
       <td class="muted">${item.unit}</td>
-      <td class="right">¥${item.price.toLocaleString()}</td>
+      <td class="right">
+        <input class="qty-input" type="number" min="0" step="1"
+          value="${item.priceEx}" oninput="updatePrice('${cat}',${i},this.value)"
+          style="width:90px;text-align:right">
+        <small class="muted"> →¥${item.price.toLocaleString()}</small>
+      </td>
       <td class="right">
         <input class="qty-input" type="number" min="0" step="0.1"
-          value="${item.qty}" onchange="updateQty('${cat}',${i},this.value)">
+          value="${item.qty}" oninput="updateQty('${cat}',${i},this.value)">
       </td>
-      <td class="right">${sub>0 ? '¥'+Math.round(sub).toLocaleString() : '<span class="muted">—</span>'}</td>
+      <td class="right" id="sub-${i}">${sub>0 ? '¥'+Math.round(sub).toLocaleString() : '<span class="muted">—</span>'}</td>
       <td><button class="btn-del" onclick="delItem('${cat}',${i})">削除</button></td>
     </tr>`;
   }).join('');
@@ -419,6 +424,7 @@ function renderPanel() {
         <div class="top-btns">
           <button class="btn btn-orange" onclick="openOcr()">写真から追加</button>
           <button class="btn btn-blue" onclick="downloadCSV()">CSVダウンロード</button>
+          <button class="btn btn-orange" onclick="window.print()">印刷</button>
         </div>
       </div>
       <div class="form-row">
@@ -431,7 +437,7 @@ function renderPanel() {
       <table>
         <thead><tr>
           <th>品名</th><th>単位</th>
-          <th class="right">単価（税込）<span class="tax-badge">${taxLabel}込</span></th>
+          <th class="right">単価（税抜入力→税込）<span class="tax-badge">${taxLabel}込</span></th>
           <th class="right">数量</th>
           <th class="right">小計（税込）</th>
           <th></th>
@@ -462,11 +468,41 @@ function renderGrand() {
 
 function updateQty(cat, i, val) {
   data[cat][i].qty = parseFloat(val) || 0;
-  save(); renderGrand();
+  save();
+  refreshRow(cat, i);
+  refreshSectionTotal(cat);
+  renderGrand();
+}
+
+function updatePrice(cat, i, val) {
+  const priceEx = parseFloat(val) || 0;
+  data[cat][i].priceEx = priceEx;
+  data[cat][i].price = tin(priceEx, cat);
+  save();
+  refreshRow(cat, i);
+  refreshSectionTotal(cat);
+  renderGrand();
+}
+
+function refreshRow(cat, i) {
+  const item = data[cat][i];
+  const sub = item.price * item.qty;
+  const subEl = document.getElementById(`sub-${i}`);
+  if (subEl) subEl.innerHTML = sub > 0 ? '¥' + Math.round(sub).toLocaleString() : '<span class="muted">—</span>';
+  // 税込表示を更新
+  const row = document.getElementById(`row-${i}`);
+  if (row) {
+    const small = row.querySelector('small');
+    if (small) small.textContent = ` →¥${item.price.toLocaleString()}`;
+  }
+}
+
+function refreshSectionTotal(cat) {
   const items = data[cat];
   const totalAmt = items.reduce((s,x) => s + x.price * x.qty, 0);
   const totalQty = items.reduce((s,x) => s + x.qty, 0);
-  document.querySelector('.section-total').innerHTML =
+  const el = document.querySelector('.section-total');
+  if (el) el.innerHTML =
     `<span>点数: <strong>${totalQty.toLocaleString()}</strong></span>
      <span>小計: <strong>¥${Math.round(totalAmt).toLocaleString()}</strong></span>`;
 }
