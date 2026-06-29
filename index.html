@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>棚卸し表</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+
+    header {
+      background: #2c7a4b;
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 1.4rem; }
+
+    .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+
+    .card h2 { font-size: 1rem; margin-bottom: 14px; color: #555; }
+
+    .form-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .form-row input {
+      flex: 1;
+      min-width: 140px;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+    .form-row input:focus { outline: none; border-color: #2c7a4b; }
+
+    button {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    .btn-add { background: #2c7a4b; color: white; }
+    .btn-add:hover { background: #235f3a; }
+    .btn-csv { background: #1a6fa8; color: white; }
+    .btn-csv:hover { background: #155a8a; }
+    .btn-delete { background: transparent; color: #e53e3e; border: 1px solid #e53e3e; padding: 5px 10px; font-size: 0.85rem; }
+    .btn-delete:hover { background: #fff5f5; }
+    .btn-edit { background: transparent; color: #2c7a4b; border: 1px solid #2c7a4b; padding: 5px 10px; font-size: 0.85rem; }
+    .btn-edit:hover { background: #f0fff4; }
+    .btn-save { background: #2c7a4b; color: white; padding: 5px 10px; font-size: 0.85rem; }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: #f0f4f0;
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 0.9rem;
+      color: #555;
+      border-bottom: 2px solid #ddd;
+    }
+    tbody tr { border-bottom: 1px solid #eee; }
+    tbody tr:hover { background: #fafafa; }
+    tbody td { padding: 10px 12px; font-size: 0.95rem; }
+    tbody td input {
+      width: 100%;
+      padding: 5px 8px;
+      border: 1px solid #2c7a4b;
+      border-radius: 4px;
+      font-size: 0.95rem;
+    }
+
+    .actions { display: flex; gap: 6px; }
+
+    .summary {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .summary-item { font-size: 0.9rem; color: #555; }
+    .summary-total { font-size: 1.2rem; font-weight: bold; color: #2c7a4b; }
+
+    .empty { text-align: center; color: #aaa; padding: 40px; font-size: 0.95rem; }
+
+    .top-actions { display: flex; gap: 10px; justify-content: flex-end; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>棚卸し表</h1>
+  <span id="date-label"></span>
+</header>
+
+<div class="container">
+  <div class="card">
+    <h2>商品を追加</h2>
+    <div class="form-row">
+      <input type="text" id="input-name" placeholder="品名" />
+      <input type="number" id="input-price" placeholder="単価（円）" min="0" />
+      <input type="number" id="input-qty" placeholder="数量" min="1" value="1" />
+      <button class="btn-add" onclick="addItem()">追加</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="top-actions">
+      <button class="btn-csv" onclick="downloadCSV()">CSVダウンロード</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>品名</th>
+          <th>単価（円）</th>
+          <th>数量</th>
+          <th>小計（円）</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="item-list"></tbody>
+    </table>
+    <div id="empty" class="empty">商品がまだありません</div>
+    <div style="margin-top:16px;" class="summary">
+      <div class="summary-item">合計点数: <strong id="total-qty">0</strong> 点</div>
+      <div class="summary-item">品目数: <strong id="total-items">0</strong> 種</div>
+      <div class="summary-total">合計金額: ¥<span id="total-price">0</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let items = JSON.parse(localStorage.getItem('inventory') || '[]');
+
+  document.getElementById('date-label').textContent = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' });
+
+  function save() {
+    localStorage.setItem('inventory', JSON.stringify(items));
+  }
+
+  function render() {
+    const tbody = document.getElementById('item-list');
+    const empty = document.getElementById('empty');
+    tbody.innerHTML = '';
+
+    if (items.length === 0) {
+      empty.style.display = 'block';
+    } else {
+      empty.style.display = 'none';
+      items.forEach((item, i) => {
+        const tr = document.createElement('tr');
+        if (item.editing) {
+          tr.innerHTML = `
+            <td>${i + 1}</td>
+            <td><input type="text" id="e-name-${i}" value="${item.name}" /></td>
+            <td><input type="number" id="e-price-${i}" value="${item.price}" min="0" /></td>
+            <td><input type="number" id="e-qty-${i}" value="${item.qty}" min="1" /></td>
+            <td>—</td>
+            <td class="actions">
+              <button class="btn-save" onclick="saveEdit(${i})">保存</button>
+            </td>
+          `;
+        } else {
+          const subtotal = item.price * item.qty;
+          tr.innerHTML = `
+            <td>${i + 1}</td>
+            <td>${item.name}</td>
+            <td>¥${item.price.toLocaleString()}</td>
+            <td>${item.qty}</td>
+            <td>¥${subtotal.toLocaleString()}</td>
+            <td class="actions">
+              <button class="btn-edit" onclick="startEdit(${i})">編集</button>
+              <button class="btn-delete" onclick="deleteItem(${i})">削除</button>
+            </td>
+          `;
+        }
+        tbody.appendChild(tr);
+      });
+    }
+
+    const totalQty = items.reduce((s, x) => s + x.qty, 0);
+    const totalPrice = items.reduce((s, x) => s + x.price * x.qty, 0);
+    document.getElementById('total-qty').textContent = totalQty.toLocaleString();
+    document.getElementById('total-items').textContent = items.length;
+    document.getElementById('total-price').textContent = totalPrice.toLocaleString();
+  }
+
+  function addItem() {
+    const name = document.getElementById('input-name').value.trim();
+    const price = parseInt(document.getElementById('input-price').value);
+    const qty = parseInt(document.getElementById('input-qty').value) || 1;
+    if (!name || isNaN(price)) { alert('品名と単価を入力してください'); return; }
+    items.push({ name, price, qty, editing: false });
+    document.getElementById('input-name').value = '';
+    document.getElementById('input-price').value = '';
+    document.getElementById('input-qty').value = '1';
+    save(); render();
+  }
+
+  function deleteItem(i) {
+    if (!confirm(`「${items[i].name}」を削除しますか？`)) return;
+    items.splice(i, 1);
+    save(); render();
+  }
+
+  function startEdit(i) {
+    items[i].editing = true;
+    render();
+  }
+
+  function saveEdit(i) {
+    const name = document.getElementById(`e-name-${i}`).value.trim();
+    const price = parseInt(document.getElementById(`e-price-${i}`).value);
+    const qty = parseInt(document.getElementById(`e-qty-${i}`).value) || 1;
+    if (!name || isNaN(price)) { alert('品名と単価を入力してください'); return; }
+    items[i] = { name, price, qty, editing: false };
+    save(); render();
+  }
+
+  function downloadCSV() {
+    const date = new Date().toLocaleDateString('ja-JP').replace(/\//g, '-');
+    let csv = '﻿品名,単価（円）,数量,小計（円）\n';
+    items.forEach(item => {
+      csv += `"${item.name}",${item.price},${item.qty},${item.price * item.qty}\n`;
+    });
+    const total = items.reduce((s, x) => s + x.price * x.qty, 0);
+    csv += `合計,,,${total}\n`;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `棚卸し表_${date}.csv`;
+    a.click();
+  }
+
+  document.getElementById('input-qty').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
+  document.getElementById('input-price').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('input-qty').focus(); });
+  document.getElementById('input-name').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('input-price').focus(); });
+
+  render();
+</script>
+</body>
+</html>
