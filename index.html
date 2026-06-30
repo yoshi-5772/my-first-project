@@ -538,14 +538,14 @@ function renderPanel() {
       </td>
       <td class="muted">${item.unit}</td>
       <td class="right">
-        <input class="qty-input" data-col="price" type="number" min="0" step="1"
+        <input class="qty-input" data-col="price" type="text" inputmode="decimal"
           value="${item.priceEx}" oninput="updatePrice('${cat}',${i},this.value)"
           style="width:90px;text-align:right">
         <small class="muted"> →¥${item.price.toLocaleString()}</small>
         <span class="print-val">¥${item.price.toLocaleString()}</span>
       </td>
       <td class="right">
-        <input class="qty-input" data-col="qty" type="number" min="0" step="0.1"
+        <input class="qty-input" data-col="qty" type="text" inputmode="decimal"
           value="${item.qty}" oninput="updateQty('${cat}',${i},this.value)">
         <span class="print-val">${item.qty}</span>
       </td>
@@ -968,12 +968,9 @@ function addFromOcr() {
   renderPanel();
 }
 
-// 数値入力フォーカス時に全選択（既存の数字を上書きできるように）
+// 数値入力フォーカス時に全選択
 document.addEventListener('focusin', e => {
-  if (e.target.classList.contains('qty-input')) setTimeout(() => e.target.select(), 0);
-});
-document.addEventListener('pointerdown', e => {
-  if (e.target.classList.contains('qty-input')) setTimeout(() => e.target.select(), 0);
+  if (e.target.classList.contains('qty-input')) e.target.select();
 });
 
 // Enterキーで同じ列の次の行へ移動
@@ -993,9 +990,7 @@ document.addEventListener('keydown', e => {
   const next = inputs[idx + 1];
   if (next) {
     next.focus();
-    next.value = '0';
-    next.dispatchEvent(new Event('input', { bubbles: true }));
-    setTimeout(() => next.select(), 0);
+    next.select();
   }
 });
 
