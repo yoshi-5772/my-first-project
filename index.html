@@ -164,31 +164,21 @@
     .drop-zone:hover, .drop-zone.drag { border-color: #2c7a4b; color: #2c7a4b; }
     .drop-zone img { max-width: 100%; max-height: 200px; border-radius: 6px; margin-top: 10px; }
     .ocr-status { padding: 10px; background: #f0fdf4; border-radius: 6px; font-size: 0.9rem; color: #166534; margin-bottom: 12px; }
-    .ocr-result { border: 1px solid #ddd; border-radius: 6px; padding: 10px; font-size: 0.85rem; color: #444; white-space: pre-wrap; max-height: 120px; overflow-y: auto; margin-bottom: 12px; background: #fafafa; }
-    .ocr-item-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-    .ocr-item-table th { background: #f4f7f4; padding: 7px 8px; font-size: 0.8rem; color: #666; border-bottom: 1px solid #e0e0e0; text-align: left; }
-    .ocr-item-table td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; font-size: 0.88rem; }
-    .ocr-item-table input[type=text], .ocr-item-table input[type=number] {
-      width: 100%; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem;
-    }
-    .ocr-item-table td:nth-child(2) { min-width: 140px; }
-    .ocr-item-table input[type=text]:focus, .ocr-item-table input[type=number]:focus { outline: none; border-color: #2c7a4b; }
+    .ocr-result { border: 1px solid #ddd; border-radius: 6px; padding: 10px; font-size: 0.85rem; color: #444; white-space: pre-wrap; max-height: 160px; overflow-y: auto; margin-bottom: 12px; background: #fafafa; }
+    .ocr-fields { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .ocr-fields input { flex: 1; min-width: 100px; padding: 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 0.9rem; }
+    .ocr-fields input:focus { outline: none; border-color: #2c7a4b; }
     .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
     .btn-gray { background: #e5e7eb; color: #374151; }
     .btn-gray:hover { background: #d1d5db; }
 
     .print-name { display: none; }
-    .print-val { display: none; }
-    .print-title { display: none; }
     @media print {
-      header, .tabs, .form-row, .top-btns, .btn, .btn-del, .modal-bg { display: none !important; }
+      header, .tabs, .form-row, .top-btns, .btn, .btn-del, .qty-input, .name-input, .modal-bg { display: none !important; }
       small { display: none !important; }
       .print-name { display: inline !important; }
-      .print-val { display: inline !important; }
-      .name-input, .qty-input { display: none !important; }
       .container { margin: 0; padding: 0; }
       .card { box-shadow: none; border: 1px solid #ccc; }
-      .print-title { display: block !important; text-align: center; font-size: 2rem; font-weight: 700; padding: 16px 0 8px; letter-spacing: 0.05em; }
     }
   </style>
 </head>
@@ -196,51 +186,52 @@
 
 <header>
   <h1>棚卸し表 — Golot</h1>
-  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+  <div style="display:flex;align-items:center;gap:10px">
     <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px" onclick="changeMonth(-1)">◀</button>
     <span id="month-label" style="font-size:1rem;font-weight:600;min-width:90px;text-align:center"></span>
     <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px" onclick="changeMonth(1)">▶</button>
-    <button class="btn" style="background:rgba(255,255,255,0.2);color:#fff;padding:5px 10px;font-size:0.8rem" onclick="exportBackup()" title="全データをJSONで保存">💾 バックアップ</button>
-    <label class="btn" style="background:rgba(255,255,255,0.12);color:#fff;padding:5px 10px;font-size:0.8rem;cursor:pointer" title="バックアップから復元">
-      📂 復元<input type="file" accept=".json" style="display:none" onchange="importBackup(this)">
-    </label>
-    <span id="backup-status" style="font-size:0.72rem;opacity:0.75;white-space:nowrap"></span>
   </div>
 </header>
 
 <div class="tabs" id="tabs"></div>
 
-<div class="print-title">棚卸し表 — Golot</div>
-
 <div class="container">
   <div id="panel"></div>
+  <div class="grand-summary">
+    <div class="items">
+      <div>品目数: <strong id="g-items">0</strong> 種</div>
+      <div>合計数量: <strong id="g-qty">0</strong></div>
+    </div>
+    <div class="grand-total">合計 ¥<span id="g-total">0</span>（税込）</div>
+  </div>
 </div>
 
 <!-- OCRモーダル -->
 <div class="modal-bg" id="ocr-modal">
   <div class="modal">
-    <h3>写真から品目を追加 <small style="font-size:0.8rem;color:#888;font-weight:normal">追加先: <span id="ocr-cat"></span></small></h3>
-    <div id="api-key-row" style="display:none;gap:8px;margin-bottom:12px;align-items:center">
-      <input type="password" id="api-key-input" placeholder="Anthropic APIキーを入力（初回のみ）"
-        style="flex:1;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:0.85rem">
-    </div>
+    <h3>写真から品目を追加</h3>
     <div class="drop-zone" id="drop-zone" onclick="document.getElementById('img-input').click()">
-      <div id="drop-text">ここをタップして写真を選択（複数枚OK）<br><small>納品書・値札など</small></div>
-      <input type="file" id="img-input" accept="image/*" multiple style="display:none" onchange="loadImages(this)">
-      <div id="thumb-row" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:8px"></div>
+      <div id="drop-text">ここをタップして写真を選択<br><small>（納品書・値札・棚の写真など）</small></div>
+      <input type="file" id="img-input" accept="image/*" style="display:none" onchange="loadImage(this)">
     </div>
     <div class="ocr-status" id="ocr-status" style="display:none"></div>
-    <div id="ocr-items-area" style="display:none">
-      <p style="font-size:0.85rem;color:#555;margin-bottom:8px;">追加する品目にチェックを入れて「まとめて追加」してください</p>
-      <div id="ocr-items-list"></div>
+    <div class="ocr-result" id="ocr-result" style="display:none"></div>
+    <p style="font-size:0.85rem;color:#666;margin-bottom:10px;">読み取り結果を確認して品目・単価を入力してください</p>
+    <div class="ocr-fields">
+      <input type="text" id="ocr-name" placeholder="品名" onfocus="selAll(this)" />
+      <input type="text" id="ocr-unit" placeholder="単位" style="max-width:70px" onfocus="selAll(this)" />
+      <input type="number" id="ocr-price" placeholder="単価（税抜）" min="0" onfocus="selAll(this)" />
+      <input type="number" id="ocr-qty" placeholder="数量" min="0" step="0.1" value="1" onfocus="selAll(this)" />
     </div>
-    <div class="modal-btns" style="margin-top:14px">
+    <div style="font-size:0.8rem;color:#888;margin-bottom:12px;">追加先カテゴリ: <strong id="ocr-cat"></strong></div>
+    <div class="modal-btns">
       <button class="btn btn-gray" onclick="closeOcr()">キャンセル</button>
-      <button class="btn btn-green" id="ocr-add-btn" onclick="addFromOcr()" style="display:none">まとめて追加</button>
+      <button class="btn btn-green" onclick="addFromOcr()">追加</button>
     </div>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 const TAX_RATE = {
   '精肉': 1.08, '食材': 1.08, '調味料': 1.08,
@@ -362,72 +353,28 @@ function initMonth(ym) {
     // 保存データが空（品目0件）の場合はRAWで再初期化
     const hasItems = DATA_CATS.some(cat => data[cat] && data[cat].length > 0);
     if (hasItems) return;
-    localStorage.removeItem(monthKey(ym)); // 壊れたデータを削除
   }
-  // RAWデータで初期化
-  DATA_CATS.forEach(cat => {
-    data[cat] = RAW[cat].map(([name, unit, priceEx, qty]) => ({
-      name, unit, priceEx, price: tin(priceEx, cat), qty
-    }));
-  });
+  // 新しい月: 直近の保存済み月から品目・単価を引き継ぎ、数量だけ0にする
+  const prev = latestSavedData();
+  if (prev) {
+    data = {};
+    DATA_CATS.forEach(cat => {
+      data[cat] = (prev[cat] || []).map(x => ({
+        ...x,
+        priceEx: x.priceEx != null ? x.priceEx : Math.round(x.price / (TAX_RATE[cat] || 1.10))
+      }));
+    });
+  } else {
+    DATA_CATS.forEach(cat => {
+      data[cat] = RAW[cat].map(([name, unit, priceEx, qty]) => ({
+        name, unit, priceEx, price: tin(priceEx, cat), qty
+      }));
+    });
+  }
   save();
 }
 
-// ---- 保存・バックアップ ----
-let _saveTimer = null;
-function save() {
-  const payload = JSON.stringify(data);
-  localStorage.setItem(monthKey(currentMonth), payload);
-  // 自動バックアップ（直近の状態を別キーにも保持）
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(() => {
-    localStorage.setItem('inv_autobk_' + currentMonth, payload);
-    showBackupStatus('自動保存済み ✓');
-  }, 800);
-}
-
-function showBackupStatus(msg) {
-  const el = document.getElementById('backup-status');
-  if (!el) return;
-  el.textContent = msg;
-  clearTimeout(el._t);
-  el._t = setTimeout(() => { el.textContent = ''; }, 3000);
-}
-
-function exportBackup() {
-  const out = {};
-  Object.keys(localStorage).filter(k => k.startsWith('inv_') && !k.startsWith('inv_autobk_')).forEach(k => {
-    out[k] = JSON.parse(localStorage.getItem(k));
-  });
-  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  const d = new Date();
-  a.download = `棚卸しバックアップ_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
-  a.click();
-  showBackupStatus('ダウンロード完了 ✓');
-}
-
-function importBackup(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const obj = JSON.parse(e.target.result);
-      let count = 0;
-      Object.keys(obj).forEach(k => {
-        if (k.startsWith('inv_')) { localStorage.setItem(k, JSON.stringify(obj[k])); count++; }
-      });
-      alert(`${count}ヶ月分のデータを復元しました。`);
-      initMonth(currentMonth);
-      renderTabs();
-      renderPanel();
-    } catch { alert('ファイルが壊れています'); }
-  };
-  reader.readAsText(file);
-  input.value = '';
-}
+function save() { localStorage.setItem(monthKey(currentMonth), JSON.stringify(data)); }
 
 function latestSavedData() {
   const keys = Object.keys(localStorage)
@@ -447,7 +394,6 @@ function changeMonth(delta) {
 }
 
 let activeTab = 'サマリー';
-let sortOrder = 'default'; // default / name / price_asc / price_desc / qty_asc / qty_desc / sub_desc
 
 function renderTabs() {
   document.getElementById('tabs').innerHTML = CATEGORIES.map(c =>
@@ -503,21 +449,6 @@ function catTotal(cat) {
   return (data[cat] || []).reduce((s,x) => s + x.price * x.qty, 0);
 }
 
-function setSortOrder(val) { sortOrder = val; renderPanel(); }
-
-function sortedItems(items) {
-  const idx = items.map((item, i) => ({ item, i }));
-  switch (sortOrder) {
-    case 'name':      return idx.sort((a,b) => a.item.name.localeCompare(b.item.name, 'ja'));
-    case 'price_asc': return idx.sort((a,b) => a.item.price - b.item.price);
-    case 'price_desc':return idx.sort((a,b) => b.item.price - a.item.price);
-    case 'qty_asc':   return idx.sort((a,b) => a.item.qty - b.item.qty);
-    case 'qty_desc':  return idx.sort((a,b) => b.item.qty - a.item.qty);
-    case 'sub_desc':  return idx.sort((a,b) => (b.item.price*b.item.qty) - (a.item.price*a.item.qty));
-    default:          return idx;
-  }
-}
-
 // ---- カテゴリパネル ----
 function renderPanel() {
   if (activeTab === 'サマリー') { renderSummary(); return; }
@@ -527,31 +458,24 @@ function renderPanel() {
   const totalQty = items.reduce((s,x) => s + x.qty, 0);
   const taxLabel = TAX_RATE[cat] === 1.08 ? '8%' : '10%';
 
-  const sorted = sortedItems(items);
-  const rows = sorted.map(({ item, i }) => {
+  const rows = items.map((item, i) => {
     const sub = item.price * item.qty;
     return `<tr id="row-${i}">
-      <td style="min-width:0">
-        <input class="chk-item" type="checkbox" style="margin-right:6px;vertical-align:middle">
-        <input class="name-input" data-col="name" type="text" value="${item.name}" oninput="updateName('${cat}',${i},this.value)">
-        <span class="print-name">${item.name}</span>
-      </td>
+      <td><input class="name-input" type="text" value="${item.name}" onfocus="selAll(this)" oninput="updateName('${cat}',${i},this.value)"><span class="print-name">${item.name}</span></td>
       <td class="muted">${item.unit}</td>
       <td class="right">
-        <input class="qty-input" data-col="price" type="text" inputmode="decimal" autocomplete="off"
-          value="${item.priceEx}" oninput="updatePrice('${cat}',${i},this.value)"
-          onfocus="this.dataset.p=this.value;this.value=''"
-          onblur="if(this.value===''){this.value=this.dataset.p||'0';updatePrice('${cat}',${i},this.value)}"
+        <input class="qty-input" type="text" inputmode="decimal" autocomplete="off"
+          value="${item.priceEx}" onfocus="selAll(this)" oninput="updatePrice('${cat}',${i},this.value)"
+          onblur="blurNum(this,'${cat}',${i},'price')"
+          data-nav-row="${i}" data-nav-col="price"
           style="width:90px;text-align:right">
         <small class="muted"> →¥${item.price.toLocaleString()}</small>
-        <span class="print-val">¥${item.price.toLocaleString()}</span>
       </td>
       <td class="right">
-        <input class="qty-input" data-col="qty" type="text" inputmode="decimal" autocomplete="off"
-          value="${item.qty}" oninput="updateQty('${cat}',${i},this.value)"
-          onfocus="this.dataset.p=this.value;this.value=''"
-          onblur="if(this.value===''){this.value=this.dataset.p||'0';updateQty('${cat}',${i},this.value)}">
-        <span class="print-val">${item.qty}</span>
+        <input class="qty-input" type="text" inputmode="decimal" autocomplete="off"
+          value="${item.qty}" onfocus="selAll(this)" oninput="updateQty('${cat}',${i},this.value)"
+          onblur="blurNum(this,'${cat}',${i},'qty')"
+          data-nav-row="${i}" data-nav-col="qty">
       </td>
       <td class="right" id="sub-${i}">${sub>0 ? '¥'+Math.round(sub).toLocaleString() : '<span class="muted">—</span>'}</td>
       <td><button class="btn-del" onclick="delItem('${cat}',${i})">削除</button></td>
@@ -561,7 +485,7 @@ function renderPanel() {
   document.getElementById('panel').innerHTML = `
     <div class="card">
       <div class="card-header">
-        <h2>${cat} <span style="font-size:0.85rem;font-weight:400;color:#555;margin-left:12px">点数: <strong style="color:#1e5631">${totalQty.toLocaleString()}</strong> &nbsp; 小計: <strong style="color:#1e5631">¥${Math.round(totalAmt).toLocaleString()}</strong></span></h2>
+        <h2>${cat}</h2>
         <div class="top-btns">
           <button class="btn btn-orange" onclick="openOcr()">写真から追加</button>
           <button class="btn btn-blue" onclick="downloadCSV()">CSVダウンロード</button>
@@ -569,26 +493,11 @@ function renderPanel() {
         </div>
       </div>
       <div class="form-row">
-        <input type="text" id="f-name" placeholder="品名" />
-        <input type="text" id="f-unit" placeholder="単位" style="max-width:70px" />
-        <input type="number" id="f-price" placeholder="単価（税抜）" min="0" />
-        <input type="number" id="f-qty" placeholder="数量" min="0" step="0.1" value="1" />
+        <input type="text" id="f-name" placeholder="品名" onfocus="selAll(this)" />
+        <input type="text" id="f-unit" placeholder="単位" style="max-width:70px" onfocus="selAll(this)" />
+        <input type="number" id="f-price" placeholder="単価（税抜）" min="0" onfocus="selAll(this)" />
+        <input type="number" id="f-qty" placeholder="数量" min="0" step="0.1" value="1" onfocus="selAll(this)" />
         <button class="btn btn-green" onclick="addItem()">追加</button>
-        <select onchange="setSortOrder(this.value)" style="flex:none;padding:7px 8px;border:1px solid #ccc;border-radius:5px;font-size:0.85rem;color:#444">
-          <option value="default" ${sortOrder==='default'?'selected':''}>登録順</option>
-          <option value="name" ${sortOrder==='name'?'selected':''}>あいうえお順</option>
-          <option value="price_asc" ${sortOrder==='price_asc'?'selected':''}>単価↑安い順</option>
-          <option value="price_desc" ${sortOrder==='price_desc'?'selected':''}>単価↓高い順</option>
-          <option value="qty_desc" ${sortOrder==='qty_desc'?'selected':''}>数量↓多い順</option>
-          <option value="qty_asc" ${sortOrder==='qty_asc'?'selected':''}>数量↑少ない順</option>
-          <option value="sub_desc" ${sortOrder==='sub_desc'?'selected':''}>小計↓高い順</option>
-        </select>
-      </div>
-      <div style="padding:8px 18px;background:#fafafa;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px">
-        <label style="font-size:0.85rem;color:#555;cursor:pointer">
-          <input type="checkbox" id="chk-all" onchange="toggleAllItems(this)"> 全選択
-        </label>
-        <button class="btn btn-del" style="font-size:0.82rem;padding:4px 12px" onclick="bulkDelete('${cat}')">選択削除</button>
       </div>
       <table>
         <thead><tr>
@@ -608,57 +517,44 @@ function renderPanel() {
   renderGrand();
 }
 
-let _grandTimer = null;
 function renderGrand() {
-  clearTimeout(_grandTimer);
-  _grandTimer = setTimeout(_doRenderGrand, 150);
-}
-function _doRenderGrand() {
   let total = 0, items = 0, qty = 0;
   DATA_CATS.forEach(cat => {
-    (data[cat] || []).forEach(x => {
+    data[cat].forEach(x => {
       total += x.price * x.qty;
       if (x.qty > 0) items++;
       qty += x.qty;
     });
   });
-  const gt = document.getElementById('g-total');
-  const gi = document.getElementById('g-items');
-  const gq = document.getElementById('g-qty');
-  if (gt) gt.textContent = Math.round(total).toLocaleString();
-  if (gi) gi.textContent = items;
-  if (gq) gq.textContent = qty.toLocaleString();
+  document.getElementById('g-total').textContent = Math.round(total).toLocaleString();
+  document.getElementById('g-items').textContent = items;
+  document.getElementById('g-qty').textContent = qty.toLocaleString();
 }
 
-let _qtyTimers = {};
 function updateQty(cat, i, val) {
   data[cat][i].qty = parseFloat(val) || 0;
+  save();
   refreshRow(cat, i);
   refreshSectionTotal(cat);
   renderGrand();
-  clearTimeout(_qtyTimers[i]);
-  _qtyTimers[i] = setTimeout(save, 600);
 }
 
-let _nameTimers = {};
 function updateName(cat, i, val) {
   data[cat][i].name = val;
+  save();
+  // print-nameも同期
   const row = document.getElementById(`row-${i}`);
   if (row) { const pn = row.querySelector('.print-name'); if (pn) pn.textContent = val; }
-  clearTimeout(_nameTimers[i]);
-  _nameTimers[i] = setTimeout(save, 600);
 }
 
-let _priceTimers = {};
 function updatePrice(cat, i, val) {
   const priceEx = parseFloat(val) || 0;
   data[cat][i].priceEx = priceEx;
   data[cat][i].price = tin(priceEx, cat);
+  save();
   refreshRow(cat, i);
   refreshSectionTotal(cat);
   renderGrand();
-  clearTimeout(_priceTimers[i]);
-  _priceTimers[i] = setTimeout(save, 600);
 }
 
 function refreshRow(cat, i) {
@@ -666,13 +562,11 @@ function refreshRow(cat, i) {
   const sub = item.price * item.qty;
   const subEl = document.getElementById(`sub-${i}`);
   if (subEl) subEl.innerHTML = sub > 0 ? '¥' + Math.round(sub).toLocaleString() : '<span class="muted">—</span>';
+  // 税込表示を更新
   const row = document.getElementById(`row-${i}`);
   if (row) {
     const small = row.querySelector('small');
     if (small) small.textContent = ` →¥${item.price.toLocaleString()}`;
-    const pvs = row.querySelectorAll('.print-val');
-    if (pvs[0]) pvs[0].textContent = `¥${item.price.toLocaleString()}`;
-    if (pvs[1]) pvs[1].textContent = item.qty;
   }
 }
 
@@ -684,8 +578,6 @@ function refreshSectionTotal(cat) {
   if (el) el.innerHTML =
     `<span>点数: <strong>${totalQty.toLocaleString()}</strong></span>
      <span>小計: <strong>¥${Math.round(totalAmt).toLocaleString()}</strong></span>`;
-  const h2sub = document.querySelector('.card-header h2 span');
-  if (h2sub) h2sub.innerHTML = `点数: <strong style="color:#1e5631">${totalQty.toLocaleString()}</strong> &nbsp; 小計: <strong style="color:#1e5631">¥${Math.round(totalAmt).toLocaleString()}</strong>`;
 }
 
 function addItem() {
@@ -705,23 +597,6 @@ function addItem() {
 function delItem(cat, i) {
   if (!confirm(`「${data[cat][i].name}」を削除しますか？`)) return;
   data[cat].splice(i, 1);
-  save(); renderPanel();
-}
-
-function toggleAllItems(cb) {
-  document.querySelectorAll('.chk-item').forEach(c => c.checked = cb.checked);
-}
-
-function bulkDelete(cat) {
-  const checks = document.querySelectorAll('.chk-item');
-  const toDelete = [];
-  checks.forEach((chk, i) => { if (chk.checked) toDelete.push(i); });
-  if (!toDelete.length) { alert('削除する品目を選択してください'); return; }
-  if (!confirm(`${toDelete.length}件を削除しますか？`)) return;
-  // 後ろから削除してインデックスがずれないようにする
-  for (let i = toDelete.length - 1; i >= 0; i--) {
-    data[cat].splice(toDelete[i], 1);
-  }
   save(); renderPanel();
 }
 
@@ -751,24 +626,19 @@ function downloadCSV() {
   a.click();
 }
 
-// ---- APIキー管理 ----
-function getApiKey() { return localStorage.getItem('claude_api_key') || ''; }
-function saveApiKey(k) { localStorage.setItem('claude_api_key', k); }
-
 // ---- OCR ----
-let ocrDetectedItems = [];
-
 function openOcr() {
   document.getElementById('ocr-cat').textContent = activeTab;
   document.getElementById('ocr-status').style.display = 'none';
-  document.getElementById('ocr-items-area').style.display = 'none';
-  document.getElementById('ocr-items-list').innerHTML = '';
-  document.getElementById('ocr-add-btn').style.display = 'none';
-  document.getElementById('thumb-row').innerHTML = '';
-  document.getElementById('drop-text').innerHTML = 'ここをタップして写真を選択（複数枚OK）<br><small>納品書・値札など</small>';
+  document.getElementById('ocr-result').style.display = 'none';
+  document.getElementById('ocr-name').value = '';
+  document.getElementById('ocr-unit').value = '';
+  document.getElementById('ocr-price').value = '';
+  document.getElementById('ocr-qty').value = '1';
+  document.getElementById('drop-text').innerHTML = 'ここをタップして写真を選択<br><small>（納品書・値札・棚の写真など）</small>';
+  const old = document.getElementById('drop-zone').querySelector('img');
+  if (old) old.remove();
   document.getElementById('img-input').value = '';
-  ocrDetectedItems = [];
-  document.getElementById('api-key-row').style.display = getApiKey() ? 'none' : 'flex';
   document.getElementById('ocr-modal').classList.add('open');
 }
 
@@ -776,220 +646,65 @@ function closeOcr() {
   document.getElementById('ocr-modal').classList.remove('open');
 }
 
-function loadImages(input) {
-  const files = Array.from(input.files);
-  if (!files.length) return;
-
-  // サムネイル表示
-  const thumbRow = document.getElementById('thumb-row');
-  thumbRow.innerHTML = '';
-  document.getElementById('drop-text').textContent = `${files.length}枚選択済み`;
-
-  // APIキー保存
-  const keyInput = document.getElementById('api-key-input');
-  if (keyInput && keyInput.value.trim()) saveApiKey(keyInput.value.trim());
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    showOcrStatus('APIキーを入力してください', 'error');
-    return;
-  }
-
-  ocrDetectedItems = [];
-  document.getElementById('ocr-items-area').style.display = 'none';
-  document.getElementById('ocr-items-list').innerHTML = '';
-  document.getElementById('ocr-add-btn').style.display = 'none';
-
-  showOcrStatus(`読み取り中... 0 / ${files.length}`, 'loading');
-
-  // 全ファイルを並列読み込み
-  const readAsDataURL = file => new Promise(resolve => {
-    const r = new FileReader();
-    r.onload = e => resolve(e.target.result);
-    r.readAsDataURL(file);
-  });
-
-  let processed = 0;
-  Promise.all(files.map(async file => {
-    const raw = await readAsDataURL(file);
-
-    // サムネは元画像（表示用）
+function loadImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dz = document.getElementById('drop-zone');
+    const old = dz.querySelector('img');
+    if (old) old.remove();
     const img = document.createElement('img');
-    img.src = raw;
-    img.style.cssText = 'height:60px;border-radius:4px;border:1px solid #ddd';
-    thumbRow.appendChild(img);
+    img.src = e.target.result;
+    dz.appendChild(img);
+    document.getElementById('drop-text').textContent = '';
+    runOcr(e.target.result);
+  };
+  reader.readAsDataURL(file);
+}
 
-    // API送信用：1600px以下にリサイズ＋JPEG圧縮で容量を大幅削減
-    const compressed = await compressImage(raw, 1600, 0.82);
+async function runOcr(src) {
+  const status = document.getElementById('ocr-status');
+  const result = document.getElementById('ocr-result');
+  status.style.display = 'block';
+  status.textContent = '読み取り中...';
+  result.style.display = 'none';
+  try {
+    const { data: { text } } = await Tesseract.recognize(src, 'jpn+eng', {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          status.textContent = `読み取り中... ${Math.round(m.progress*100)}%`;
+        }
+      }
+    });
+    status.textContent = '読み取り完了。内容を確認して品目・単価を入力してください。';
+    result.style.display = 'block';
+    result.textContent = text;
 
-    try {
-      const items = await runOcrOnImage(compressed, apiKey);
-      ocrDetectedItems.push(...items);
-    } catch(err) {
-      console.error(err);
+    // 数字っぽいものを価格候補として自動入力
+    const prices = text.match(/[\d,]+円|¥[\d,]+|[\d]{3,6}/g);
+    if (prices) {
+      const num = prices[prices.length-1].replace(/[円¥,]/g,'');
+      if (!isNaN(num) && num > 0) {
+        document.getElementById('ocr-price').value = num;
+      }
     }
-    processed++;
-    showOcrStatus(`読み取り中... ${processed} / ${files.length}`, 'loading');
-  })).then(() => {
-    showOcrStatus(`完了！ ${ocrDetectedItems.length}件検出`, 'ok');
-    renderOcrItems();
-  });
-}
-
-function compressImage(src, maxPx, quality) {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', quality));
-    };
-    img.src = src;
-  });
-}
-
-async function runOcrOnImage(src, apiKey) {
-  const base64 = src.split(',')[1];
-  const mediaType = src.split(';')[0].split(':')[1];
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: `この画像は飲食店の納品書・請求書・値札などです。
-画像に含まれる全ての品目を読み取り、以下の形式のJSON配列のみで返答してください（前置き・説明・コードブロック一切不要）:
-[{"name":"品名","unit":"単位","price":税抜単価の数値,"category":"カテゴリ名"},...]
-
-読み取りルール:
-- 品名: 正確に読み取る。長い場合も省略せず全て記載
-- 単位: k（kg）/本/p（パック）/個/枚/cs（ケース）/束/缶/ℓ/g など
-- price: 税抜き単価の数値のみ（税込なら÷1.08または÷1.10して概算）。不明な場合は0
-- category は以下から選択:
-  精肉（牛・豚・鶏・内臓・ハム等）
-  食材（野菜・魚介・乳製品・ソース・調理食品等）
-  調味料（醤油・酢・塩・砂糖・油・スパイス等）
-  酒/飲材（ビール・ワイン・日本酒・焼酎・ジュース・炭酸等）
-  備品/包材（洗剤・包装材・ラップ・手袋・消耗品等）
-- 合計行・小計行・消費税行は除外する` }
-        ]
-      }]
-    })
-  });
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error?.message || res.status);
+  } catch(e) {
+    status.textContent = '読み取りに失敗しました。手動で入力してください。';
   }
-  const json = await res.json();
-  const text = json.content[0].text.trim().replace(/```json|```/g, '').trim();
-  const parsed = JSON.parse(text);
-  return Array.isArray(parsed) ? parsed : [parsed];
-}
-
-function renderOcrItems() {
-  if (!ocrDetectedItems.length) return;
-  const list = document.getElementById('ocr-items-list');
-  const catOptions = DATA_CATS.map(c => `<option value="${c}">${c}</option>`).join('');
-  list.innerHTML = `
-    <table class="ocr-item-table">
-      <thead><tr>
-        <th style="width:28px"><input type="checkbox" id="ocr-check-all" checked onchange="toggleAllOcr(this)"></th>
-        <th>品名</th><th style="width:60px">単位</th><th style="width:85px">単価（税抜）</th><th style="width:55px">数量</th>
-        <th style="width:100px">カテゴリ</th>
-      </tr></thead>
-      <tbody>
-        ${ocrDetectedItems.map((item, i) => {
-          const cat = DATA_CATS.includes(item.category) ? item.category : activeTab;
-          const isDup = (data[cat] || []).some(x => x.name.trim() === (item.name || '').trim());
-          return `
-        <tr style="${isDup ? 'background:#fef9e7;' : ''}">
-          <td><input type="checkbox" class="ocr-chk" ${isDup ? '' : 'checked'}></td>
-          <td>
-            <input type="text" value="${item.name || ''}" oninput="ocrDetectedItems[${i}].name=this.value">
-            ${isDup ? '<span style="font-size:0.75rem;color:#b45309;margin-left:4px">重複</span>' : ''}
-          </td>
-          <td><input type="text" value="${item.unit || '—'}" oninput="ocrDetectedItems[${i}].unit=this.value"></td>
-          <td><input type="number" value="${item.price || ''}" min="0" oninput="ocrDetectedItems[${i}].price=parseFloat(this.value)||0"></td>
-          <td><input type="number" value="1" min="0" step="0.1" oninput="ocrDetectedItems[${i}].qty=parseFloat(this.value)||0"></td>
-          <td><select onchange="ocrDetectedItems[${i}].category=this.value" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:0.8rem">
-            ${DATA_CATS.map(c => `<option value="${c}" ${c===cat?'selected':''}>${c}</option>`).join('')}
-          </select></td>
-        </tr>`;
-        }).join('')}
-      </tbody>
-    </table>`;
-  // qtyを初期化
-  ocrDetectedItems.forEach(x => x.qty = 1);
-  document.getElementById('ocr-items-area').style.display = 'block';
-  document.getElementById('ocr-add-btn').style.display = 'inline-block';
-}
-
-function toggleAllOcr(cb) {
-  document.querySelectorAll('.ocr-chk').forEach(c => c.checked = cb.checked);
-}
-
-function showOcrStatus(msg, type) {
-  const el = document.getElementById('ocr-status');
-  el.style.display = 'block';
-  el.textContent = msg;
-  el.style.background = type === 'error' ? '#fef2f2' : type === 'ok' ? '#f0fdf4' : '#fffbeb';
-  el.style.color = type === 'error' ? '#991b1b' : type === 'ok' ? '#166534' : '#92400e';
 }
 
 function addFromOcr() {
-  const checks = document.querySelectorAll('.ocr-chk');
-  let added = 0;
-  ocrDetectedItems.forEach((item, i) => {
-    if (!checks[i] || !checks[i].checked) return;
-    if (!item.name || !item.price) return;
-    const cat = DATA_CATS.includes(item.category) ? item.category : activeTab;
-    data[cat].push({
-      name: item.name,
-      unit: item.unit || '—',
-      priceEx: item.price,
-      price: tin(item.price, cat),
-      qty: item.qty || 1
-    });
-    added++;
-  });
-  if (added === 0) { alert('追加する品目を選択してください'); return; }
+  const name = document.getElementById('ocr-name').value.trim();
+  const unit = document.getElementById('ocr-unit').value.trim() || '—';
+  const priceEx = parseFloat(document.getElementById('ocr-price').value);
+  const qty = parseFloat(document.getElementById('ocr-qty').value) || 0;
+  if (!name || isNaN(priceEx)) { alert('品名と単価を入力してください'); return; }
+  data[activeTab].push({ name, unit, priceEx, price: tin(priceEx, activeTab), qty });
   save();
   closeOcr();
   renderPanel();
 }
-
-
-// Enterキーで同じ列の次の行へ移動
-document.addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  const el = document.activeElement;
-  if (!el) return;
-  // 列を特定するクラスを取得
-  const colClass = ['name-input', 'qty-input'].find(c => el.classList.contains(c));
-  if (!colClass) return;
-  // 同列の全入力を取得（単価と数量は両方qty-inputなのでdata-col属性で区別）
-  const col = el.dataset.col || colClass;
-  const inputs = Array.from(document.querySelectorAll(`[data-col="${col}"]`));
-  const idx = inputs.indexOf(el);
-  if (idx === -1) return;
-  e.preventDefault();
-  const next = inputs[idx + 1];
-  if (next) next.focus();
-});
 
 // drag & drop
 const dz = document.getElementById('drop-zone');
@@ -997,13 +712,45 @@ dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dra
 dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
 dz.addEventListener('drop', e => {
   e.preventDefault(); dz.classList.remove('drag');
-  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-  if (files.length) {
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
     const input = document.getElementById('img-input');
     const dt = new DataTransfer();
-    files.forEach(f => dt.items.add(f));
+    dt.items.add(file);
     input.files = dt.files;
-    loadImages(input);
+    loadImage(input);
+  }
+});
+
+// フォーカス時に値をクリア（前の値が残らないようにする）
+function selAll(el) {
+  el.dataset.prev = el.value;
+  el.value = '';
+}
+// フォーカスが外れたとき、未入力なら元の値に戻す
+function blurNum(el, cat, i, type) {
+  if (el.value !== '') return;
+  el.value = el.dataset.prev || '0';
+  if (type === 'qty') updateQty(cat, i, el.value);
+  else updatePrice(cat, i, el.value);
+}
+
+// Enter キー → 単価→数量→次行の単価 と移動
+document.getElementById('panel').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const inp = e.target;
+  if (!inp.dataset.navCol) return;
+  e.preventDefault();
+  const row = parseInt(inp.dataset.navRow);
+  const col = inp.dataset.navCol;
+  let next;
+  if (col === 'price') {
+    next = document.querySelector(`[data-nav-row="${row}"][data-nav-col="qty"]`);
+  } else {
+    next = document.querySelector(`[data-nav-row="${row + 1}"][data-nav-col="price"]`);
+  }
+  if (next) {
+    selAll(next);
   }
 });
 
