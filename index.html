@@ -173,10 +173,15 @@
     .btn-gray:hover { background: #d1d5db; }
 
     .print-name { display: none; }
+    .print-val { display: none; }
+    .print-title { display: none; }
     @media print {
-      header, .tabs, .form-row, .top-btns, .btn, .btn-del, .qty-input, .name-input, .modal-bg { display: none !important; }
+      header, .tabs, .form-row, .top-btns, .btn, .btn-del, .modal-bg { display: none !important; }
       small { display: none !important; }
       .print-name { display: inline !important; }
+      .print-val { display: inline !important; }
+      .print-title { display: block !important; text-align: center; font-size: 2rem; font-weight: 700; padding: 16px 0 8px; }
+      .name-input, .qty-input { display: none !important; }
       .container { margin: 0; padding: 0; }
       .card { box-shadow: none; border: 1px solid #ccc; }
     }
@@ -186,14 +191,20 @@
 
 <header>
   <h1>棚卸し表 — Golot</h1>
-  <div style="display:flex;align-items:center;gap:10px">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
     <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px" onclick="changeMonth(-1)">◀</button>
     <span id="month-label" style="font-size:1rem;font-weight:600;min-width:90px;text-align:center"></span>
     <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px" onclick="changeMonth(1)">▶</button>
+    <button class="btn" style="background:rgba(255,255,255,0.2);color:#fff;padding:5px 10px;font-size:0.8rem" onclick="exportBackup()">💾 バックアップ</button>
+    <label class="btn" style="background:rgba(255,255,255,0.12);color:#fff;padding:5px 10px;font-size:0.8rem;cursor:pointer">
+      📂 復元<input type="file" accept=".json" style="display:none" onchange="importBackup(this)">
+    </label>
+    <span id="backup-status" style="font-size:0.72rem;opacity:0.75;white-space:nowrap"></span>
   </div>
 </header>
 
 <div class="tabs" id="tabs"></div>
+<div class="print-title">棚卸し表 — Golot</div>
 
 <div class="container">
   <div id="panel"></div>
@@ -458,7 +469,8 @@ function renderPanel() {
   const totalQty = items.reduce((s,x) => s + x.qty, 0);
   const taxLabel = TAX_RATE[cat] === 1.08 ? '8%' : '10%';
 
-  const rows = items.map((item, i) => {
+  const sorted = sortedItems(items);
+  const rows = sorted.map(({ item, i }) => {
     const sub = item.price * item.qty;
     return `<tr id="row-${i}">
       <td><input class="name-input" type="text" value="${item.name}" onfocus="selAll(this)" oninput="updateName('${cat}',${i},this.value)"><span class="print-name">${item.name}</span></td>
@@ -470,12 +482,14 @@ function renderPanel() {
           data-nav-row="${i}" data-nav-col="price"
           style="width:90px;text-align:right">
         <small class="muted"> →¥${item.price.toLocaleString()}</small>
+        <span class="print-val">¥${item.price.toLocaleString()}</span>
       </td>
       <td class="right">
         <input class="qty-input" type="text" inputmode="decimal" autocomplete="off"
           value="${item.qty}" onfocus="selAll(this)" oninput="updateQty('${cat}',${i},this.value)"
           onblur="blurNum(this,'${cat}',${i},'qty')"
           data-nav-row="${i}" data-nav-col="qty">
+        <span class="print-val">${item.qty}</span>
       </td>
       <td class="right" id="sub-${i}">${sub>0 ? '¥'+Math.round(sub).toLocaleString() : '<span class="muted">—</span>'}</td>
       <td><button class="btn-del" onclick="delItem('${cat}',${i})">削除</button></td>
@@ -485,7 +499,7 @@ function renderPanel() {
   document.getElementById('panel').innerHTML = `
     <div class="card">
       <div class="card-header">
-        <h2>${cat}</h2>
+        <h2>${cat} <span style="font-size:0.85rem;font-weight:400;color:#555;margin-left:12px">点数: <strong style="color:#1e5631">${totalQty.toLocaleString()}</strong> &nbsp; 小計: <strong style="color:#1e5631">¥${Math.round(totalAmt).toLocaleString()}</strong></span></h2>
         <div class="top-btns">
           <button class="btn btn-orange" onclick="openOcr()">写真から追加</button>
           <button class="btn btn-blue" onclick="downloadCSV()">CSVダウンロード</button>
@@ -498,6 +512,15 @@ function renderPanel() {
         <input type="number" id="f-price" placeholder="単価（税抜）" min="0" onfocus="selAll(this)" />
         <input type="number" id="f-qty" placeholder="数量" min="0" step="0.1" value="1" onfocus="selAll(this)" />
         <button class="btn btn-green" onclick="addItem()">追加</button>
+        <select onchange="setSortOrder(this.value)" style="flex:none;padding:7px 8px;border:1px solid #ccc;border-radius:5px;font-size:0.85rem;color:#444">
+          <option value="default" ${sortOrder==='default'?'selected':''}>登録順</option>
+          <option value="name" ${sortOrder==='name'?'selected':''}>あいうえお順</option>
+          <option value="price_asc" ${sortOrder==='price_asc'?'selected':''}>単価↑安い順</option>
+          <option value="price_desc" ${sortOrder==='price_desc'?'selected':''}>単価↓高い順</option>
+          <option value="qty_desc" ${sortOrder==='qty_desc'?'selected':''}>数量↓多い順</option>
+          <option value="qty_asc" ${sortOrder==='qty_asc'?'selected':''}>数量↑少ない順</option>
+          <option value="sub_desc" ${sortOrder==='sub_desc'?'selected':''}>小計↓高い順</option>
+        </select>
       </div>
       <table>
         <thead><tr>
@@ -704,6 +727,64 @@ function addFromOcr() {
   save();
   closeOcr();
   renderPanel();
+}
+
+// ---- バックアップ ----
+function showBackupStatus(msg) {
+  const el = document.getElementById('backup-status');
+  if (!el) return;
+  el.textContent = msg;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
+function exportBackup() {
+  const out = {};
+  Object.keys(localStorage).filter(k => k.startsWith('inv_') && !k.startsWith('inv_autobk_')).forEach(k => {
+    out[k] = JSON.parse(localStorage.getItem(k));
+  });
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const d = new Date();
+  a.download = `棚卸しバックアップ_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
+  a.click();
+  showBackupStatus('ダウンロード完了 ✓');
+}
+
+function importBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const obj = JSON.parse(e.target.result);
+      let count = 0;
+      Object.keys(obj).forEach(k => {
+        if (k.startsWith('inv_')) { localStorage.setItem(k, JSON.stringify(obj[k])); count++; }
+      });
+      alert(`${count}ヶ月分のデータを復元しました。`);
+      initMonth(currentMonth); renderTabs(); renderPanel();
+    } catch { alert('ファイルが壊れています'); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// ---- 並び替え ----
+let sortOrder = 'default';
+function setSortOrder(val) { sortOrder = val; renderPanel(); }
+function sortedItems(items) {
+  const idx = items.map((item, i) => ({ item, i }));
+  switch (sortOrder) {
+    case 'name':       return idx.sort((a,b) => a.item.name.localeCompare(b.item.name, 'ja'));
+    case 'price_asc':  return idx.sort((a,b) => a.item.price - b.item.price);
+    case 'price_desc': return idx.sort((a,b) => b.item.price - a.item.price);
+    case 'qty_asc':    return idx.sort((a,b) => a.item.qty - b.item.qty);
+    case 'qty_desc':   return idx.sort((a,b) => b.item.qty - a.item.qty);
+    case 'sub_desc':   return idx.sort((a,b) => (b.item.price*b.item.qty)-(a.item.price*a.item.qty));
+    default:           return idx;
+  }
 }
 
 // drag & drop
