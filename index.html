@@ -993,8 +993,9 @@ document.addEventListener('keydown', e => {
   const next = inputs[idx + 1];
   if (next) {
     next.focus();
-    next.value = '';
+    next.value = '0';
     next.dispatchEvent(new Event('input', { bubbles: true }));
+    setTimeout(() => next.select(), 0);
   }
 });
 
