@@ -966,6 +966,17 @@ function addFromOcr() {
   renderPanel();
 }
 
+// Enterキーで次の入力欄へ
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const inputs = Array.from(document.querySelectorAll('.qty-input, .name-input'));
+  const idx = inputs.indexOf(document.activeElement);
+  if (idx === -1) return;
+  e.preventDefault();
+  const next = inputs[idx + 1];
+  if (next) { next.focus(); next.select(); }
+});
+
 // drag & drop
 const dz = document.getElementById('drop-zone');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
