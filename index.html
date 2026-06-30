@@ -538,14 +538,14 @@ function renderPanel() {
       </td>
       <td class="muted">${item.unit}</td>
       <td class="right">
-        <input class="qty-input" data-col="price" type="text" inputmode="decimal"
+        <input class="qty-input" data-col="price" type="text" inputmode="decimal" autocomplete="off"
           value="${item.priceEx}" oninput="updatePrice('${cat}',${i},this.value)"
           style="width:90px;text-align:right">
         <small class="muted"> →¥${item.price.toLocaleString()}</small>
         <span class="print-val">¥${item.price.toLocaleString()}</span>
       </td>
       <td class="right">
-        <input class="qty-input" data-col="qty" type="text" inputmode="decimal"
+        <input class="qty-input" data-col="qty" type="text" inputmode="decimal" autocomplete="off"
           value="${item.qty}" oninput="updateQty('${cat}',${i},this.value)">
         <span class="print-val">${item.qty}</span>
       </td>
@@ -989,6 +989,8 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
   const next = inputs[idx + 1];
   if (next) {
+    next.value = '0';
+    next.dispatchEvent(new Event('input', { bubbles: true }));
     next.focus();
     next.select();
   }
