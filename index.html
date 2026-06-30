@@ -533,19 +533,19 @@ function renderPanel() {
     return `<tr id="row-${i}">
       <td style="min-width:0">
         <input class="chk-item" type="checkbox" style="margin-right:6px;vertical-align:middle">
-        <input class="name-input" type="text" value="${item.name}" oninput="updateName('${cat}',${i},this.value)">
+        <input class="name-input" data-col="name" type="text" value="${item.name}" oninput="updateName('${cat}',${i},this.value)">
         <span class="print-name">${item.name}</span>
       </td>
       <td class="muted">${item.unit}</td>
       <td class="right">
-        <input class="qty-input" type="number" min="0" step="1"
+        <input class="qty-input" data-col="price" type="number" min="0" step="1"
           value="${item.priceEx}" oninput="updatePrice('${cat}',${i},this.value)"
           style="width:90px;text-align:right">
         <small class="muted"> →¥${item.price.toLocaleString()}</small>
         <span class="print-val">¥${item.price.toLocaleString()}</span>
       </td>
       <td class="right">
-        <input class="qty-input" type="number" min="0" step="0.1"
+        <input class="qty-input" data-col="qty" type="number" min="0" step="0.1"
           value="${item.qty}" oninput="updateQty('${cat}',${i},this.value)">
         <span class="print-val">${item.qty}</span>
       </td>
@@ -966,11 +966,18 @@ function addFromOcr() {
   renderPanel();
 }
 
-// Enterキーで次の入力欄へ
+// Enterキーで同じ列の次の行へ移動
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
-  const inputs = Array.from(document.querySelectorAll('.qty-input, .name-input'));
-  const idx = inputs.indexOf(document.activeElement);
+  const el = document.activeElement;
+  if (!el) return;
+  // 列を特定するクラスを取得
+  const colClass = ['name-input', 'qty-input'].find(c => el.classList.contains(c));
+  if (!colClass) return;
+  // 同列の全入力を取得（単価と数量は両方qty-inputなのでdata-col属性で区別）
+  const col = el.dataset.col || colClass;
+  const inputs = Array.from(document.querySelectorAll(`[data-col="${col}"]`));
+  const idx = inputs.indexOf(el);
   if (idx === -1) return;
   e.preventDefault();
   const next = inputs[idx + 1];
