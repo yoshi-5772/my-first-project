@@ -464,14 +464,16 @@ function renderPanel() {
       <td><input class="name-input" type="text" value="${item.name}" oninput="updateName('${cat}',${i},this.value)"><span class="print-name">${item.name}</span></td>
       <td class="muted">${item.unit}</td>
       <td class="right">
-        <input class="qty-input" type="number" min="0" step="1"
+        <input class="qty-input" type="text" inputmode="decimal" autocomplete="off"
           value="${item.priceEx}" oninput="updatePrice('${cat}',${i},this.value)"
+          data-nav-row="${i}" data-nav-col="price"
           style="width:90px;text-align:right">
         <small class="muted"> →¥${item.price.toLocaleString()}</small>
       </td>
       <td class="right">
-        <input class="qty-input" type="number" min="0" step="0.1"
-          value="${item.qty}" oninput="updateQty('${cat}',${i},this.value)">
+        <input class="qty-input" type="text" inputmode="decimal" autocomplete="off"
+          value="${item.qty}" oninput="updateQty('${cat}',${i},this.value)"
+          data-nav-row="${i}" data-nav-col="qty">
       </td>
       <td class="right" id="sub-${i}">${sub>0 ? '¥'+Math.round(sub).toLocaleString() : '<span class="muted">—</span>'}</td>
       <td><button class="btn-del" onclick="delItem('${cat}',${i})">削除</button></td>
@@ -715,6 +717,33 @@ dz.addEventListener('drop', e => {
     dt.items.add(file);
     input.files = dt.files;
     loadImage(input);
+  }
+});
+
+// 数値入力フォーカス→全選択 & Enter→次フィールド移動
+document.getElementById('panel').addEventListener('focus', e => {
+  const inp = e.target;
+  if (!inp.dataset.navCol) return;
+  // setTimeoutでモバイルキーボード展開後に確実に全選択
+  setTimeout(() => { inp.select(); }, 50);
+}, true);
+
+document.getElementById('panel').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const inp = e.target;
+  if (!inp.dataset.navCol) return;
+  e.preventDefault();
+  const row = parseInt(inp.dataset.navRow);
+  const col = inp.dataset.navCol;
+  let next;
+  if (col === 'price') {
+    next = document.querySelector(`[data-nav-row="${row}"][data-nav-col="qty"]`);
+  } else {
+    next = document.querySelector(`[data-nav-row="${row + 1}"][data-nav-col="price"]`);
+  }
+  if (next) {
+    next.focus();
+    setTimeout(() => { next.select(); }, 50);
   }
 });
 
