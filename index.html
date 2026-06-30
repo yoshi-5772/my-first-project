@@ -540,13 +540,17 @@ function renderPanel() {
       <td class="right">
         <input class="qty-input" data-col="price" type="text" inputmode="decimal" autocomplete="off"
           value="${item.priceEx}" oninput="updatePrice('${cat}',${i},this.value)"
+          onfocus="this.dataset.p=this.value;this.value=''"
+          onblur="if(this.value===''){this.value=this.dataset.p||'0';updatePrice('${cat}',${i},this.value)}"
           style="width:90px;text-align:right">
         <small class="muted"> →¥${item.price.toLocaleString()}</small>
         <span class="print-val">¥${item.price.toLocaleString()}</span>
       </td>
       <td class="right">
         <input class="qty-input" data-col="qty" type="text" inputmode="decimal" autocomplete="off"
-          value="${item.qty}" oninput="updateQty('${cat}',${i},this.value)">
+          value="${item.qty}" oninput="updateQty('${cat}',${i},this.value)"
+          onfocus="this.dataset.p=this.value;this.value=''"
+          onblur="if(this.value===''){this.value=this.dataset.p||'0';updateQty('${cat}',${i},this.value)}">
         <span class="print-val">${item.qty}</span>
       </td>
       <td class="right" id="sub-${i}">${sub>0 ? '¥'+Math.round(sub).toLocaleString() : '<span class="muted">—</span>'}</td>
@@ -968,19 +972,6 @@ function addFromOcr() {
   renderPanel();
 }
 
-// 数値入力フォーカス時にクリア（離れたとき未入力なら元に戻す）
-document.addEventListener('focusin', e => {
-  if (!e.target.classList.contains('qty-input')) return;
-  e.target.dataset.prev = e.target.value;
-  e.target.value = '';
-});
-document.addEventListener('focusout', e => {
-  if (!e.target.classList.contains('qty-input')) return;
-  if (e.target.value === '') {
-    e.target.value = e.target.dataset.prev || '0';
-    e.target.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-});
 
 // Enterキーで同じ列の次の行へ移動
 document.addEventListener('keydown', e => {
