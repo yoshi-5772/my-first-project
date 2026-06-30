@@ -991,7 +991,11 @@ document.addEventListener('keydown', e => {
   if (idx === -1) return;
   e.preventDefault();
   const next = inputs[idx + 1];
-  if (next) { next.focus(); next.select(); }
+  if (next) {
+    next.focus();
+    next.value = '';
+    next.dispatchEvent(new Event('input', { bubbles: true }));
+  }
 });
 
 // drag & drop
