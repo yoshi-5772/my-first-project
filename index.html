@@ -968,9 +968,18 @@ function addFromOcr() {
   renderPanel();
 }
 
-// 数値入力フォーカス時に全選択
+// 数値入力フォーカス時にクリア（離れたとき未入力なら元に戻す）
 document.addEventListener('focusin', e => {
-  if (e.target.classList.contains('qty-input')) e.target.select();
+  if (!e.target.classList.contains('qty-input')) return;
+  e.target.dataset.prev = e.target.value;
+  e.target.value = '';
+});
+document.addEventListener('focusout', e => {
+  if (!e.target.classList.contains('qty-input')) return;
+  if (e.target.value === '') {
+    e.target.value = e.target.dataset.prev || '0';
+    e.target.dispatchEvent(new Event('input', { bubbles: true }));
+  }
 });
 
 // Enterキーで同じ列の次の行へ移動
@@ -988,12 +997,7 @@ document.addEventListener('keydown', e => {
   if (idx === -1) return;
   e.preventDefault();
   const next = inputs[idx + 1];
-  if (next) {
-    next.value = '0';
-    next.dispatchEvent(new Event('input', { bubbles: true }));
-    next.focus();
-    next.select();
-  }
+  if (next) next.focus();
 });
 
 // drag & drop
