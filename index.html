@@ -970,7 +970,10 @@ function addFromOcr() {
 
 // 数値入力フォーカス時に全選択（既存の数字を上書きできるように）
 document.addEventListener('focusin', e => {
-  if (e.target.classList.contains('qty-input')) e.target.select();
+  if (e.target.classList.contains('qty-input')) setTimeout(() => e.target.select(), 0);
+});
+document.addEventListener('pointerdown', e => {
+  if (e.target.classList.contains('qty-input')) setTimeout(() => e.target.select(), 0);
 });
 
 // Enterキーで同じ列の次の行へ移動
