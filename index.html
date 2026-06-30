@@ -831,7 +831,7 @@ document.getElementById('panel').addEventListener('keydown', e => {
     next = document.querySelector(`[data-nav-row="${row + 1}"][data-nav-col="price"]`);
   }
   if (next) {
-    selAll(next);
+    next.focus();
   }
 });
 
