@@ -804,9 +804,13 @@ dz.addEventListener('drop', e => {
 });
 
 // フォーカス時に値をクリア（前の値が残らないようにする）
+// モバイルではfocusイベント中のvalue=''が無視されるため、少し遅らせて確実に消す
 function selAll(el) {
   el.dataset.prev = el.value;
   el.value = '';
+  setTimeout(() => {
+    if (document.activeElement === el && el.value === el.dataset.prev) el.value = '';
+  }, 0);
 }
 // フォーカスが外れたとき、未入力なら元の値に戻す
 function blurNum(el, cat, i, type) {
