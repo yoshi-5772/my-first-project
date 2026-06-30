@@ -557,7 +557,7 @@ function renderPanel() {
   document.getElementById('panel').innerHTML = `
     <div class="card">
       <div class="card-header">
-        <h2>${cat}</h2>
+        <h2>${cat} <span style="font-size:0.85rem;font-weight:400;color:#555;margin-left:12px">点数: <strong style="color:#1e5631">${totalQty.toLocaleString()}</strong> &nbsp; 小計: <strong style="color:#1e5631">¥${Math.round(totalAmt).toLocaleString()}</strong></span></h2>
         <div class="top-btns">
           <button class="btn btn-orange" onclick="openOcr()">写真から追加</button>
           <button class="btn btn-blue" onclick="downloadCSV()">CSVダウンロード</button>
@@ -680,6 +680,8 @@ function refreshSectionTotal(cat) {
   if (el) el.innerHTML =
     `<span>点数: <strong>${totalQty.toLocaleString()}</strong></span>
      <span>小計: <strong>¥${Math.round(totalAmt).toLocaleString()}</strong></span>`;
+  const h2sub = document.querySelector('.card-header h2 span');
+  if (h2sub) h2sub.innerHTML = `点数: <strong style="color:#1e5631">${totalQty.toLocaleString()}</strong> &nbsp; 小計: <strong style="color:#1e5631">¥${Math.round(totalAmt).toLocaleString()}</strong>`;
 }
 
 function addItem() {
@@ -965,6 +967,11 @@ function addFromOcr() {
   closeOcr();
   renderPanel();
 }
+
+// 数値入力フォーカス時に全選択（既存の数字を上書きできるように）
+document.addEventListener('focusin', e => {
+  if (e.target.classList.contains('qty-input')) e.target.select();
+});
 
 // Enterキーで同じ列の次の行へ移動
 document.addEventListener('keydown', e => {
