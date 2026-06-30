@@ -466,6 +466,7 @@ function renderPanel() {
       <td class="right">
         <input class="qty-input" type="text" inputmode="decimal" autocomplete="off"
           value="${item.priceEx}" onfocus="selAll(this)" oninput="updatePrice('${cat}',${i},this.value)"
+          onblur="blurNum(this,'${cat}',${i},'price')"
           data-nav-row="${i}" data-nav-col="price"
           style="width:90px;text-align:right">
         <small class="muted"> →¥${item.price.toLocaleString()}</small>
@@ -473,6 +474,7 @@ function renderPanel() {
       <td class="right">
         <input class="qty-input" type="text" inputmode="decimal" autocomplete="off"
           value="${item.qty}" onfocus="selAll(this)" oninput="updateQty('${cat}',${i},this.value)"
+          onblur="blurNum(this,'${cat}',${i},'qty')"
           data-nav-row="${i}" data-nav-col="qty">
       </td>
       <td class="right" id="sub-${i}">${sub>0 ? '¥'+Math.round(sub).toLocaleString() : '<span class="muted">—</span>'}</td>
@@ -720,14 +722,17 @@ dz.addEventListener('drop', e => {
   }
 });
 
-// iOS含む全環境で確実に全選択する関数
-// select()だけではiOSでキーボード展開後にOSが選択解除するため
-// setSelectionRangeをsetTimeoutで遅延実行する
+// フォーカス時に値をクリア（前の値が残らないようにする）
 function selAll(el) {
-  el.focus();
-  setTimeout(() => {
-    try { el.setSelectionRange(0, el.value.length); } catch(e) { el.select(); }
-  }, 30);
+  el.dataset.prev = el.value;
+  el.value = '';
+}
+// フォーカスが外れたとき、未入力なら元の値に戻す
+function blurNum(el, cat, i, type) {
+  if (el.value !== '') return;
+  el.value = el.dataset.prev || '0';
+  if (type === 'qty') updateQty(cat, i, el.value);
+  else updatePrice(cat, i, el.value);
 }
 
 // Enter キー → 単価→数量→次行の単価 と移動
