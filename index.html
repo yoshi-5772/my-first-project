@@ -86,6 +86,16 @@
       font-size: 0.9rem;
     }
     .name-input:focus { outline: none; border-color: #2c7a4b; }
+    textarea.wine-wrap {
+      width: 100%; min-height: 34px; resize: none; overflow: hidden;
+      white-space: pre-wrap; overflow-wrap: break-word; font-family: inherit;
+      line-height: 1.4; padding: 6px 7px; border: 1px solid #ccc; border-radius: 4px;
+      font-size: 0.9rem; display: block;
+    }
+    tr.wine-group-header td {
+      background: #f4f7f4; color: #1e5631; font-size: 0.85rem;
+      padding: 8px 12px; border-bottom: 1px solid #e0e0e0;
+    }
 
     .qty-input {
       width: 70px; padding: 5px 7px;
@@ -251,7 +261,11 @@
       body.print-mode-combined #main-print-title { display: none !important; }
       body.print-mode-combined .container { display: none !important; }
       body.print-mode-combined { background: #fff !important; }
-      body.print-mode-combined #print-combined { display: block !important; padding: 0 14px; }
+      body.print-mode-combined #print-combined {
+        display: flex !important; flex-direction: column; justify-content: center;
+        min-height: 100vh; padding: 0 14px; box-sizing: border-box;
+      }
+      body.print-mode-combined #print-combined .menu-print { width: 100%; }
     }
   </style>
 </head>
@@ -278,7 +292,7 @@
 
 <div class="container">
   <div id="panel"></div>
-  <div class="grand-summary">
+  <div class="grand-summary" id="grand-summary-bar">
     <div class="items">
       <div>品目数: <strong id="g-items">0</strong> 種</div>
       <div class="no-print">合計数量: <strong id="g-qty">0</strong></div>
@@ -581,6 +595,8 @@ function catTotal(cat) {
 
 // ---- カテゴリパネル ----
 function renderPanel() {
+  const summaryBar = document.getElementById('grand-summary-bar');
+  if (summaryBar) summaryBar.style.display = WINE_TABS.includes(activeTab) ? 'none' : '';
   if (activeTab === 'サマリー') { renderSummary(); return; }
   if (WINE_TABS.includes(activeTab)) { renderWinePanel(activeTab); return; }
   const cat = activeTab;
@@ -852,7 +868,8 @@ function addFromOcr() {
 // ================== ワイン/日本酒リスト ==================
 const WINE_CONFIG = {
   'ワイン(ボトル)': {
-    storeKey: 'bottle', idLabel: '品名', originLabel: '国名', hasSelect: false
+    storeKey: 'bottle', idLabel: '品名', originLabel: '国名',
+    hasSelect: true, selectField: 'color', selectLabel: '種類', selectOptions: ['白','赤'], groupBySelect: true
   },
   'ワイン(グラス白)': {
     storeKey: 'glassWhite', idLabel: '品名', originLabel: '国名',
@@ -860,7 +877,7 @@ const WINE_CONFIG = {
   },
   'ワイン(グラス赤)': {
     storeKey: 'glassRed', idLabel: '品名', originLabel: '国名',
-    hasSelect: true, selectField: 'body', selectLabel: 'ボディ', selectOptions: ['ライトボディ','ミディアムボディ','フルボディ']
+    hasSelect: true, selectField: 'body', selectLabel: 'ボディ', selectOptions: ['ライトボディ','ライト〜ミディアムボディ','ミディアムボディ','ミディアム〜フルボディ','フルボディ']
   },
   '日本酒': {
     storeKey: 'sake', idLabel: '品名', originLabel: '産地',
@@ -872,26 +889,26 @@ const WINE_STORE_KEY = 'winelist_v1';
 // 現在店舗で使用中のワイン/日本酒リスト（初回起動時の初期データ）
 const WINE_SEED_DATA = {
   bottle: [
-    { name: 'ブレッド アンド バター(シャルドネ)', origin: 'アメリカ', price: 10000, feature: '樽熟成由来のバターのようなクリーミーで濃厚なコクと、バニラの風味が特徴的な非常に人気の高いシャルドネです。' },
-    { name: 'ティエラ 甲州 シュール・リー', origin: '日本', price: 5500, feature: '日本固有のブドウ品種「甲州」を使用。シュール・リー製法（澱の上で熟成させる製法）による旨味とコク、和柑橘のようなみずみずしい酸味が特徴のすっきりとした辛口です。' },
-    { name: 'ポルコ エスピーニョ ブランコ', origin: 'ポルトガル', price: 7000, feature: '青リンゴやシトラスのフレッシュな果実味。軽やかでみずみずしい、すっきりとした味わいです。' },
-    { name: 'カトラルヴォス', origin: 'ポルトガル', price: 6000, feature: 'シラー特有のスパイシーさと、完熟した果実の凝縮感を楽しめる、飲みごたえのあるスタイルです。' },
-    { name: 'カザルダ コエリェイラ', origin: 'ポルトガル', price: 7000, feature: 'ポルトガルを代表する品種トゥリガナショナルを使用し、力強い骨格と華やかなアロマ、重厚な飲み口が特徴です。' },
-    { name: 'ブレッド アンド バター(カベルネソーヴィニョン)', origin: 'アメリカ', price: 10000, feature: '白と同様に濃厚で、黒系果実の凝縮感に樽由来のトースト感やチョコのような甘美な風味が調和した、リッチな赤ワインです。' },
-    { name: 'ベンド', origin: 'アメリカ', price: 5600, feature: 'カリフォルニアらしい親しみやすさがあり、果実味がストレートに広がる、日常的に楽しみやすい味わいです。' },
-    { name: 'プラティ', origin: 'アメリカ', price: 14000, feature: 'ソノマらしい豊かで上品な黒系果実の甘み。上質な樽のニュアンスとしなやかな骨格を併せ持つ、洗練されたフルボディです。' },
-    { name: 'ヴェンジェンス', origin: 'アメリカ', price: 14000, feature: 'ナパ・ヴァレーが生む究極のフルボディ。完熟したイチゴやブラックベリーの芳醇な香りと、バニラのニュアンスが重なる贅沢な一杯です。' }
+    { name: 'ブレッド アンド バター(シャルドネ)', origin: 'アメリカ', price: 10000, color: '白', feature: '樽熟成由来のバターのようなクリーミーで濃厚なコクと、バニラの風味が特徴的な非常に人気の高いシャルドネです。' },
+    { name: 'ティエラ 甲州 シュール・リー', origin: '日本', price: 5500, color: '白', feature: '日本固有のブドウ品種「甲州」を使用。シュール・リー製法（澱の上で熟成させる製法）による旨味とコク、和柑橘のようなみずみずしい酸味が特徴のすっきりとした辛口です。' },
+    { name: 'ポルコ エスピーニョ ブランコ', origin: 'ポルトガル', price: 7000, color: '白', feature: '青リンゴやシトラスのフレッシュな果実味。軽やかでみずみずしい、すっきりとした味わいです。' },
+    { name: 'カトラルヴォス', origin: 'ポルトガル', price: 6000, color: '赤', feature: 'シラー特有のスパイシーさと、完熟した果実の凝縮感を楽しめる、飲みごたえのあるスタイルです。' },
+    { name: 'カザルダ コエリェイラ', origin: 'ポルトガル', price: 7000, color: '赤', feature: 'ポルトガルを代表する品種トゥリガナショナルを使用し、力強い骨格と華やかなアロマ、重厚な飲み口が特徴です。' },
+    { name: 'ブレッド アンド バター(カベルネソーヴィニョン)', origin: 'アメリカ', price: 10000, color: '赤', feature: '白と同様に濃厚で、黒系果実の凝縮感に樽由来のトースト感やチョコのような甘美な風味が調和した、リッチな赤ワインです。' },
+    { name: 'ベンド', origin: 'アメリカ', price: 5600, color: '赤', feature: 'カリフォルニアらしい親しみやすさがあり、果実味がストレートに広がる、日常的に楽しみやすい味わいです。' },
+    { name: 'プラティ', origin: 'アメリカ', price: 14000, color: '赤', feature: 'ソノマらしい豊かで上品な黒系果実の甘み。上質な樽のニュアンスとしなやかな骨格を併せ持つ、洗練されたフルボディです。' },
+    { name: 'ヴェンジェンス', origin: 'アメリカ', price: 14000, color: '赤', feature: 'ナパ・ヴァレーが生む究極のフルボディ。完熟したイチゴやブラックベリーの芳醇な香りと、バニラのニュアンスが重なる贅沢な一杯です。' }
   ],
   glassWhite: [
     { name: 'ベンド シャルドネ', origin: 'アメリカ', price: 900, dryness: '辛口', feature: '品種:シャルドネ。コクのある辛口タイプ。' },
     { name: 'マンズワイン 甲州 シュール・リー ティエラ', origin: '日本・山梨', price: 800, dryness: '辛口', feature: '品種:甲州。フレッシュですっきりとした辛口タイプ。' }
   ],
   glassRed: [
-    { name: 'ペイロタン ピノ・ノワール', origin: 'フランス', price: 800, body: 'ライトボディ', feature: '品種:ピノ・ノワール(ライト〜ミディアムボディ)' },
+    { name: 'ペイロタン ピノ・ノワール', origin: 'フランス', price: 800, body: 'ライト〜ミディアムボディ', feature: '品種:ピノ・ノワール' },
     { name: 'ペイロタン シラー', origin: 'フランス', price: 800, body: 'ミディアムボディ', feature: '品種:シラー' },
     { name: 'テラソス・ド・テージョ', origin: 'ポルトガル', price: 900, body: 'ミディアムボディ', feature: '品種:アラゴネス主体' },
     { name: 'カザル・ダ・コエリェイラ', origin: 'ポルトガル', price: 1000, body: 'フルボディ', feature: '品種:トゥリガ・ナショナル、アリカンテ・ブーシェ、シラー' },
-    { name: 'ベンド カベルネ・ソーヴィニヨン', origin: 'アメリカ', price: 900, body: 'ミディアムボディ', feature: '品種:カベルネ・ソーヴィニヨン(ミディアム〜フルボディ)' },
+    { name: 'ベンド カベルネ・ソーヴィニヨン', origin: 'アメリカ', price: 900, body: 'ミディアム〜フルボディ', feature: '品種:カベルネ・ソーヴィニヨン' },
     { name: 'パヌール カベルネ・ソーヴィニヨン', origin: 'チリ', price: 900, body: 'フルボディ', feature: '品種:カベルネ・ソーヴィニヨン' }
   ],
   sake: [
@@ -925,28 +942,49 @@ let wineSortOrder = 'default';
 function setWineSortOrder(val) { wineSortOrder = val; renderPanel(); }
 function sortedWineItems(items) { return sortByCommonOrder(items, wineSortOrder); }
 
+function wineWrapField(cfg, storeKey, i, field, value, placeholder) {
+  return `<textarea class="name-input wine-wrap" rows="1" placeholder="${placeholder||''}" onfocus="selAll(this)" oninput="updateWineField('${storeKey}',${i},'${field}',this.value);autoGrowWine(this)">${escapeHtml(value||'')}</textarea>`;
+}
+
+function renderWineRow(cfg, item, i) {
+  const selectCell = cfg.hasSelect ? `
+    <td>
+      <select class="name-input" onchange="updateWineField('${cfg.storeKey}',${i},'${cfg.selectField}',this.value)">
+        ${cfg.selectOptions.map(o => `<option value="${escapeHtml(o)}" ${item[cfg.selectField]===o?'selected':''}>${escapeHtml(o)}</option>`).join('')}
+      </select>
+    </td>` : '';
+  return `<tr id="wine-row-${i}">
+    <td>${wineWrapField(cfg, cfg.storeKey, i, 'name', item.name)}</td>
+    <td>${wineWrapField(cfg, cfg.storeKey, i, 'origin', item.origin)}</td>
+    <td class="right"><input class="qty-input" type="number" min="0" value="${item.price||0}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'price',this.value)" style="width:80px;text-align:right"></td>
+    ${selectCell}
+    <td>${wineWrapField(cfg, cfg.storeKey, i, 'feature', item.feature)}</td>
+    <td><button class="btn-del" onclick="delWineItem('${cfg.storeKey}',${i})">削除</button></td>
+  </tr>`;
+}
+
+function autoGrowWine(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
 function renderWinePanel(cat) {
   const cfg = WINE_CONFIG[cat];
   const items = wineData[cfg.storeKey];
   const sorted = sortedWineItems(items);
   const selectHeader = cfg.hasSelect ? `<th>${cfg.selectLabel}</th>` : '';
-  const rows = sorted.map(({ item, i }) => {
-    const selectCell = cfg.hasSelect ? `
-      <td>
-        <select class="name-input" onchange="updateWineField('${cfg.storeKey}',${i},'${cfg.selectField}',this.value)">
-          ${cfg.selectOptions.map(o => `<option value="${escapeHtml(o)}" ${item[cfg.selectField]===o?'selected':''}>${escapeHtml(o)}</option>`).join('')}
-        </select>
-        <span class="print-val">${escapeHtml(item[cfg.selectField] || '')}</span>
-      </td>` : '';
-    return `<tr id="wine-row-${i}">
-      <td><input class="name-input" type="text" value="${escapeHtml(item.name||'')}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'name',this.value)"><span class="print-name">${escapeHtml(item.name||'')}</span></td>
-      <td><input class="name-input" type="text" value="${escapeHtml(item.origin||'')}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'origin',this.value)"><span class="print-name">${escapeHtml(item.origin||'')}</span></td>
-      <td class="right"><input class="qty-input" type="number" min="0" value="${item.price||0}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'price',this.value)" style="width:80px;text-align:right"><span class="print-val">¥${(item.price||0).toLocaleString()}</span></td>
-      ${selectCell}
-      <td><input class="name-input" type="text" value="${escapeHtml(item.feature||'')}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'feature',this.value)"><span class="print-val">${escapeHtml(item.feature||'')}</span></td>
-      <td><button class="btn-del" onclick="delWineItem('${cfg.storeKey}',${i})">削除</button></td>
-    </tr>`;
-  }).join('');
+  let rows;
+  if (cfg.groupBySelect) {
+    rows = cfg.selectOptions.map(opt => {
+      const group = sorted.filter(({ item }) => (item[cfg.selectField] || cfg.selectOptions[0]) === opt);
+      if (!group.length) return '';
+      const colspan = 4 + (cfg.hasSelect ? 1 : 0) + 1;
+      const groupRows = group.map(({ item, i }) => renderWineRow(cfg, item, i)).join('');
+      return `<tr class="wine-group-header"><td colspan="${colspan}"><strong>${escapeHtml(opt)}ワイン</strong></td></tr>${groupRows}`;
+    }).join('');
+  } else {
+    rows = sorted.map(({ item, i }) => renderWineRow(cfg, item, i)).join('');
+  }
 
   document.getElementById('panel').innerHTML = `
     <div class="card">
@@ -979,6 +1017,7 @@ function renderWinePanel(cat) {
         <tbody>${rows}</tbody>
       </table>
     </div>`;
+  document.querySelectorAll('#panel textarea.wine-wrap').forEach(autoGrowWine);
 }
 
 function addWineItem(cat) {
@@ -1030,10 +1069,10 @@ function downloadWineCSV(cat) {
 }
 
 // ---- ワイン/日本酒 印刷 ----
-function wineMenuItemHTML(cfg, x) {
+function wineMenuItemHTML(cfg, x, hideSelectInSub) {
   const subParts = [];
   if (x.origin) subParts.push(x.origin);
-  if (cfg.hasSelect && x[cfg.selectField]) subParts.push(x[cfg.selectField]);
+  if (cfg.hasSelect && !hideSelectInSub && x[cfg.selectField]) subParts.push(x[cfg.selectField]);
   const sub = subParts.map(escapeHtml).join('　／　');
   return `
     <div class="menu-item">
@@ -1049,6 +1088,14 @@ function wineMenuItemHTML(cfg, x) {
 function wineSectionHTML(cat, sectionLabel) {
   const cfg = WINE_CONFIG[cat];
   const items = wineData[cfg.storeKey];
+  if (cfg.groupBySelect) {
+    return cfg.selectOptions.map(opt => {
+      const group = items.filter(x => (x[cfg.selectField] || cfg.selectOptions[0]) === opt);
+      if (!group.length) return '';
+      const itemsHtml = group.map(x => wineMenuItemHTML(cfg, x, true)).join('');
+      return `<h2>${escapeHtml(opt)}ワイン</h2><div class="menu-section">${itemsHtml}</div>`;
+    }).join('');
+  }
   const itemsHtml = items.map(x => wineMenuItemHTML(cfg, x)).join('');
   return `
     ${sectionLabel ? `<h2>${escapeHtml(sectionLabel)}</h2>` : ''}
