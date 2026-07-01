@@ -198,6 +198,9 @@
       border: 1px solid #c9a86a;
       padding: 40px 48px 34px;
     }
+    #print-combined .menu-print.menu-print-wide {
+      max-width: 960px;
+    }
     #print-combined .menu-print::before {
       content: '';
       position: absolute;
@@ -1372,10 +1375,10 @@ function fitPrintToOnePage() {
   container.style.width = prev.width;
 }
 
-function showWineMenuPrint(title, bodyHtml, subtitle) {
+function showWineMenuPrint(title, bodyHtml, subtitle, wide) {
   const container = document.getElementById('print-combined');
   const divider = '<div class="menu-divider"><span></span><i>◆</i><span></span></div>';
-  container.innerHTML = `<div class="menu-print">
+  container.innerHTML = `<div class="menu-print${wide ? ' menu-print-wide' : ''}">
       <h1>${escapeHtml(title)}</h1>
       ${subtitle ? `<div class="menu-subtitle">${escapeHtml(subtitle)}</div>` : ''}
       ${divider}
@@ -1398,7 +1401,7 @@ const WINE_PRINT_TITLES = { 'ワイン(ボトル)': 'ボトルワイン', '日�
 const WINE_PRINT_SUBTITLES = { 'ワイン(ボトル)': 'BOTTLE WINE', '日本酒': 'SAKE' };
 function printWineTab(cat) {
   if (cat === 'ワイン(グラス白)' || cat === 'ワイン(グラス赤)') { printGlassWine(); return; }
-  showWineMenuPrint(WINE_PRINT_TITLES[cat] || cat, wineSectionHTML(cat, null), WINE_PRINT_SUBTITLES[cat]);
+  showWineMenuPrint(WINE_PRINT_TITLES[cat] || cat, wineSectionHTML(cat, null), WINE_PRINT_SUBTITLES[cat], cat === 'ワイン(ボトル)');
 }
 
 window.addEventListener('afterprint', () => {
