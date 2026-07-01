@@ -805,18 +805,60 @@ const WINE_CONFIG = {
   },
   '日本酒': {
     storeKey: 'sake', idLabel: '品名', originLabel: '産地',
-    hasSelect: true, selectField: 'grade', selectLabel: '種別', selectOptions: ['純米酒','純米吟醸','純米大吟醸','本醸造','吟醸','大吟醸','普通酒']
+    hasSelect: true, selectField: 'grade', selectLabel: '種別', selectOptions: ['純米酒','特別純米酒','純米吟醸','純米大吟醸','本醸造','吟醸','大吟醸','普通酒']
   }
 };
 const WINE_STORE_KEY = 'winelist_v1';
 
+// 現在店舗で使用中のワイン/日本酒リスト（初回起動時の初期データ）
+const WINE_SEED_DATA = {
+  bottle: [
+    { name: 'ブレッド アンド バター(シャルドネ)', origin: 'アメリカ', price: 10000, feature: '樽熟成由来のバターのようなクリーミーで濃厚なコクと、バニラの風味が特徴的な非常に人気の高いシャルドネです。' },
+    { name: 'ティエラ 甲州 シュール・リー', origin: '日本', price: 5500, feature: '日本固有のブドウ品種「甲州」を使用。シュール・リー製法（澱の上で熟成させる製法）による旨味とコク、和柑橘のようなみずみずしい酸味が特徴のすっきりとした辛口です。' },
+    { name: 'ポルコ エスピーニョ ブランコ', origin: 'ポルトガル', price: 7000, feature: '青リンゴやシトラスのフレッシュな果実味。軽やかでみずみずしい、すっきりとした味わいです。' },
+    { name: 'カトラルヴォス', origin: 'ポルトガル', price: 6000, feature: 'シラー特有のスパイシーさと、完熟した果実の凝縮感を楽しめる、飲みごたえのあるスタイルです。' },
+    { name: 'カザルダ コエリェイラ', origin: 'ポルトガル', price: 7000, feature: 'ポルトガルを代表する品種トゥリガナショナルを使用し、力強い骨格と華やかなアロマ、重厚な飲み口が特徴です。' },
+    { name: 'ブレッド アンド バター(カベルネソーヴィニョン)', origin: 'アメリカ', price: 10000, feature: '白と同様に濃厚で、黒系果実の凝縮感に樽由来のトースト感やチョコのような甘美な風味が調和した、リッチな赤ワインです。' },
+    { name: 'ベンド', origin: 'アメリカ', price: 5600, feature: 'カリフォルニアらしい親しみやすさがあり、果実味がストレートに広がる、日常的に楽しみやすい味わいです。' },
+    { name: 'プラティ', origin: 'アメリカ', price: 14000, feature: 'ソノマらしい豊かで上品な黒系果実の甘み。上質な樽のニュアンスとしなやかな骨格を併せ持つ、洗練されたフルボディです。' },
+    { name: 'ヴェンジェンス', origin: 'アメリカ', price: 14000, feature: 'ナパ・ヴァレーが生む究極のフルボディ。完熟したイチゴやブラックベリーの芳醇な香りと、バニラのニュアンスが重なる贅沢な一杯です。' }
+  ],
+  glassWhite: [
+    { name: 'ベンド シャルドネ', origin: 'アメリカ', price: 900, dryness: '辛口', feature: '品種:シャルドネ。コクのある辛口タイプ。' },
+    { name: 'マンズワイン 甲州 シュール・リー ティエラ', origin: '日本・山梨', price: 800, dryness: '辛口', feature: '品種:甲州。フレッシュですっきりとした辛口タイプ。' }
+  ],
+  glassRed: [
+    { name: 'ペイロタン ピノ・ノワール', origin: 'フランス', price: 800, body: 'ライトボディ', feature: '品種:ピノ・ノワール(ライト〜ミディアムボディ)' },
+    { name: 'ペイロタン シラー', origin: 'フランス', price: 800, body: 'ミディアムボディ', feature: '品種:シラー' },
+    { name: 'テラソス・ド・テージョ', origin: 'ポルトガル', price: 900, body: 'ミディアムボディ', feature: '品種:アラゴネス主体' },
+    { name: 'カザル・ダ・コエリェイラ', origin: 'ポルトガル', price: 1000, body: 'フルボディ', feature: '品種:トゥリガ・ナショナル、アリカンテ・ブーシェ、シラー' },
+    { name: 'ベンド カベルネ・ソーヴィニヨン', origin: 'アメリカ', price: 900, body: 'ミディアムボディ', feature: '品種:カベルネ・ソーヴィニヨン(ミディアム〜フルボディ)' },
+    { name: 'パヌール カベルネ・ソーヴィニヨン', origin: 'チリ', price: 900, body: 'フルボディ', feature: '品種:カベルネ・ソーヴィニヨン' }
+  ],
+  sake: [
+    { name: '純 特別純米酒', origin: '岩手県遠野市', price: 900, grade: '特別純米酒', feature: '遠野の米と水で醸された、芯のあるしっかりとした味わい' },
+    { name: '浜千鳥 特別純米酒', origin: '岩手県釜石市', price: 900, grade: '特別純米酒', feature: '爽やかな香りとキレの良さが特徴の、食中酒として定評のある一本' },
+    { name: '奥六 特別純米酒', origin: '岩手県奥州市', price: 900, grade: '特別純米酒', feature: '6号酵母を使用。華やかすぎず、米の旨みを引き出した穏やかな飲み口' },
+    { name: '奥六 特別純米酒 生酛', origin: '岩手県奥州市', price: 900, grade: '特別純米酒', feature: '生酛造りならではの、米の旨みを引き出した奥深い飲み口' },
+    { name: '二兎 純米大吟醸', origin: '愛知県岡崎市', price: 1000, grade: '純米大吟醸', feature: '「味」と「香」の二兎を追うバランスの良さと華やかさ' },
+    { name: '黒龍 吟風', origin: '福井県永平寺町', price: 1000, grade: '純米吟醸', feature: '北海道産酒米「吟風」を使用。新緑を思わせるフレッシュな香りと透明感、凛とした余韻が魅力' }
+  ]
+};
+
 let wineData = {};
 function loadWineData() {
-  try { wineData = JSON.parse(localStorage.getItem(WINE_STORE_KEY)) || {}; }
-  catch { wineData = {}; }
-  Object.values(WINE_CONFIG).forEach(cfg => {
-    if (!wineData[cfg.storeKey]) wineData[cfg.storeKey] = [];
-  });
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(WINE_STORE_KEY)); }
+  catch { saved = null; }
+  if (saved) {
+    wineData = saved;
+    Object.values(WINE_CONFIG).forEach(cfg => {
+      if (!wineData[cfg.storeKey]) wineData[cfg.storeKey] = [];
+    });
+  } else {
+    wineData = JSON.parse(JSON.stringify(WINE_SEED_DATA));
+    saveWineData();
+  }
 }
 function saveWineData() { localStorage.setItem(WINE_STORE_KEY, JSON.stringify(wineData)); }
 
