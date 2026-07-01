@@ -302,6 +302,8 @@
   <option value="南アフリカ"></option>
   <option value="ポルトガル"></option>
 </datalist>
+<datalist id="wine-name-list"></datalist>
+<datalist id="wine-variety-list"></datalist>
 <div id="print-combined"></div>
 
 <div class="container">
@@ -348,13 +350,17 @@
       <div id="wine-drop-text">ここをタップして写真を選択<br><small>（ワイン・日本酒のラベル写真）</small></div>
       <input type="file" id="wine-img-input" accept="image/*" style="display:none" onchange="loadWineImage(this)">
     </div>
+    <p style="font-size:0.78rem;color:#999;margin:6px 0 10px;">撮影のコツ: 明るい場所で、ラベルが正面から画面いっぱいに写るように、反射・傾きを避けて撮ると読み取り精度が上がります。装飾フォントの凝ったラベルは誤読しやすいため、必要に応じて手直ししてください。</p>
     <div class="ocr-status" id="wine-ocr-status" style="display:none"></div>
     <div class="ocr-result" id="wine-ocr-result" style="display:none"></div>
     <p style="font-size:0.85rem;color:#666;margin-bottom:10px;">読み取り結果を確認して各項目を入力してください</p>
     <div class="ocr-fields">
-      <input type="text" id="wocr-name" placeholder="品名" onfocus="selAll(this)" />
+      <input type="text" id="wocr-name" placeholder="品名" list="wine-name-list" onfocus="selAll(this)" />
       <input type="text" id="wocr-origin" placeholder="国名/産地" onfocus="selAll(this)" />
       <input type="number" id="wocr-price" placeholder="価格" min="0" onfocus="selAll(this)" />
+    </div>
+    <div class="ocr-fields" id="wocr-variety-row" style="display:none">
+      <input type="text" id="wocr-variety" placeholder="品種" list="wine-variety-list" onfocus="selAll(this)" style="flex:1" />
     </div>
     <div class="ocr-fields" id="wocr-select-row" style="display:none">
       <select id="wocr-select" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:0.9rem"></select>
@@ -836,6 +842,48 @@ function loadImage(input) {
   reader.readAsDataURL(file);
 }
 
+// 撮影写真をグレースケール化＋コントラスト強調して読み取り精度を上げる
+function preprocessForOcr(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 1600;
+      const minDim = 900;
+      let scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      if (Math.max(img.width, img.height) * scale < minDim) {
+        scale = minDim / Math.max(img.width, img.height);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      try {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = imageData.data;
+        let min = 255, max = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          const g = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+          d[i] = d[i+1] = d[i+2] = g;
+          if (g < min) min = g;
+          if (g > max) max = g;
+        }
+        const range = Math.max(1, max - min);
+        for (let i = 0; i < d.length; i += 4) {
+          const v = Math.min(255, Math.max(0, Math.round((d[i] - min) / range * 255)));
+          d[i] = d[i+1] = d[i+2] = v;
+        }
+        ctx.putImageData(imageData, 0, 0);
+      } catch (e) { /* CORS等で失敗した場合は無加工のまま使う */ }
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+const OCR_RECOGNIZE_OPTIONS = { tessedit_pageseg_mode: '6' };
+
 async function runOcr(src) {
   const status = document.getElementById('ocr-status');
   const result = document.getElementById('ocr-result');
@@ -843,7 +891,9 @@ async function runOcr(src) {
   status.textContent = '読み取り中...';
   result.style.display = 'none';
   try {
-    const { data: { text } } = await Tesseract.recognize(src, 'jpn+eng', {
+    const processed = await preprocessForOcr(src);
+    const { data: { text } } = await Tesseract.recognize(processed, 'jpn+eng', {
+      ...OCR_RECOGNIZE_OPTIONS,
       logger: m => {
         if (m.status === 'recognizing text') {
           status.textContent = `読み取り中... ${Math.round(m.progress*100)}%`;
@@ -882,15 +932,15 @@ function addFromOcr() {
 // ================== ワイン/日本酒リスト ==================
 const WINE_CONFIG = {
   'ワイン(ボトル)': {
-    storeKey: 'bottle', idLabel: '品名', originLabel: '国名',
+    storeKey: 'bottle', idLabel: '品名', originLabel: '国名', hasVariety: true,
     hasSelect: true, selectField: 'color', selectLabel: '種類', selectOptions: ['白','赤','ロゼ','スパークリング'], groupBySelect: true
   },
   'ワイン(グラス白)': {
-    storeKey: 'glassWhite', idLabel: '品名', originLabel: '国名',
+    storeKey: 'glassWhite', idLabel: '品名', originLabel: '国名', hasVariety: true,
     hasSelect: true, selectField: 'dryness', selectLabel: '甘辛', selectOptions: ['辛口','甘口']
   },
   'ワイン(グラス赤)': {
-    storeKey: 'glassRed', idLabel: '品名', originLabel: '国名',
+    storeKey: 'glassRed', idLabel: '品名', originLabel: '国名', hasVariety: true,
     hasSelect: true, selectField: 'body', selectLabel: 'ボディ', selectOptions: ['ライトボディ','ライト〜ミディアムボディ','ミディアムボディ','ミディアム〜フルボディ','フルボディ']
   },
   '日本酒': {
@@ -898,32 +948,39 @@ const WINE_CONFIG = {
     hasSelect: true, selectField: 'grade', selectLabel: '種別', selectOptions: ['純米酒','特別純米酒','純米吟醸','純米大吟醸','本醸造','吟醸','大吟醸','普通酒']
   }
 };
+
+const WINE_VARIETY_LIST = [
+  'シャルドネ','ソーヴィニヨン・ブラン','リースリング','ピノ・グリ','甲州','ヴィオニエ',
+  'カベルネ・ソーヴィニヨン','ピノ・ノワール','メルロー','シラー','サンジョヴェーゼ',
+  'テンプラニーリョ','マルベック','グルナッシュ','ネッビオーロ','ジンファンデル',
+  'トゥリガ・ナショナル','マスカット・ベーリーA'
+];
 const WINE_STORE_KEY = 'winelist_v1';
 
 // 現在店舗で使用中のワイン/日本酒リスト（初回起動時の初期データ）
 const WINE_SEED_DATA = {
   bottle: [
-    { name: 'ブレッド アンド バター(シャルドネ)', origin: 'アメリカ', price: 10000, color: '白', feature: '樽熟成由来のバターのようなクリーミーで濃厚なコクと、バニラの風味が特徴的な非常に人気の高いシャルドネです。' },
-    { name: 'ティエラ 甲州 シュール・リー', origin: '日本', price: 5500, color: '白', feature: '日本固有のブドウ品種「甲州」を使用。シュール・リー製法（澱の上で熟成させる製法）による旨味とコク、和柑橘のようなみずみずしい酸味が特徴のすっきりとした辛口です。' },
-    { name: 'ポルコ エスピーニョ ブランコ', origin: 'ポルトガル', price: 7000, color: '白', feature: '青リンゴやシトラスのフレッシュな果実味。軽やかでみずみずしい、すっきりとした味わいです。' },
-    { name: 'カトラルヴォス', origin: 'ポルトガル', price: 6000, color: '赤', feature: 'シラー特有のスパイシーさと、完熟した果実の凝縮感を楽しめる、飲みごたえのあるスタイルです。' },
-    { name: 'カザルダ コエリェイラ', origin: 'ポルトガル', price: 7000, color: '赤', feature: 'ポルトガルを代表する品種トゥリガナショナルを使用し、力強い骨格と華やかなアロマ、重厚な飲み口が特徴です。' },
-    { name: 'ブレッド アンド バター(カベルネソーヴィニョン)', origin: 'アメリカ', price: 10000, color: '赤', feature: '白と同様に濃厚で、黒系果実の凝縮感に樽由来のトースト感やチョコのような甘美な風味が調和した、リッチな赤ワインです。' },
-    { name: 'ベンド', origin: 'アメリカ', price: 5600, color: '赤', feature: 'カリフォルニアらしい親しみやすさがあり、果実味がストレートに広がる、日常的に楽しみやすい味わいです。' },
-    { name: 'プラティ', origin: 'アメリカ', price: 14000, color: '赤', feature: 'ソノマらしい豊かで上品な黒系果実の甘み。上質な樽のニュアンスとしなやかな骨格を併せ持つ、洗練されたフルボディです。' },
-    { name: 'ヴェンジェンス', origin: 'アメリカ', price: 14000, color: '赤', feature: 'ナパ・ヴァレーが生む究極のフルボディ。完熟したイチゴやブラックベリーの芳醇な香りと、バニラのニュアンスが重なる贅沢な一杯です。' }
+    { name: 'ブレッド アンド バター(シャルドネ)', origin: 'アメリカ', price: 10000, color: '白', variety: 'シャルドネ', feature: '樽熟成由来のバターのようなクリーミーで濃厚なコクと、バニラの風味が特徴的な非常に人気の高いシャルドネです。' },
+    { name: 'ティエラ 甲州 シュール・リー', origin: '日本', price: 5500, color: '白', variety: '甲州', feature: '日本固有のブドウ品種「甲州」を使用。シュール・リー製法（澱の上で熟成させる製法）による旨味とコク、和柑橘のようなみずみずしい酸味が特徴のすっきりとした辛口です。' },
+    { name: 'ポルコ エスピーニョ ブランコ', origin: 'ポルトガル', price: 7000, color: '白', variety: 'マルヴァジアフィナ・セルシアル', feature: '青リンゴやシトラスのフレッシュな果実味。軽やかでみずみずしい、すっきりとした味わいです。' },
+    { name: 'カトラルヴォス', origin: 'ポルトガル', price: 6000, color: '赤', variety: 'シラー', feature: 'シラー特有のスパイシーさと、完熟した果実の凝縮感を楽しめる、飲みごたえのあるスタイルです。' },
+    { name: 'カザルダ コエリェイラ', origin: 'ポルトガル', price: 7000, color: '赤', variety: 'トゥリガ・ナショナル', feature: 'ポルトガルを代表する品種トゥリガナショナルを使用し、力強い骨格と華やかなアロマ、重厚な飲み口が特徴です。' },
+    { name: 'ブレッド アンド バター(カベルネソーヴィニョン)', origin: 'アメリカ', price: 10000, color: '赤', variety: 'カベルネ・ソーヴィニヨン', feature: '白と同様に濃厚で、黒系果実の凝縮感に樽由来のトースト感やチョコのような甘美な風味が調和した、リッチな赤ワインです。' },
+    { name: 'ベンド', origin: 'アメリカ', price: 5600, color: '赤', variety: 'カベルネ・ソーヴィニヨン', feature: 'カリフォルニアらしい親しみやすさがあり、果実味がストレートに広がる、日常的に楽しみやすい味わいです。' },
+    { name: 'プラティ', origin: 'アメリカ', price: 14000, color: '赤', variety: 'カベルネ・ソーヴィニヨン', feature: 'ソノマらしい豊かで上品な黒系果実の甘み。上質な樽のニュアンスとしなやかな骨格を併せ持つ、洗練されたフルボディです。' },
+    { name: 'ヴェンジェンス', origin: 'アメリカ', price: 14000, color: '赤', variety: 'カベルネ・メルロー', feature: 'ナパ・ヴァレーが生む究極のフルボディ。完熟したイチゴやブラックベリーの芳醇な香りと、バニラのニュアンスが重なる贅沢な一杯です。' }
   ],
   glassWhite: [
-    { name: 'ベンド シャルドネ', origin: 'アメリカ', price: 900, dryness: '辛口', feature: '品種:シャルドネ。コクのある辛口タイプ。' },
-    { name: 'マンズワイン 甲州 シュール・リー ティエラ', origin: '日本・山梨', price: 800, dryness: '辛口', feature: '品種:甲州。フレッシュですっきりとした辛口タイプ。' }
+    { name: 'ベンド シャルドネ', origin: 'アメリカ', price: 900, dryness: '辛口', variety: 'シャルドネ', feature: 'コクのある辛口タイプ。' },
+    { name: 'マンズワイン 甲州 シュール・リー ティエラ', origin: '日本・山梨', price: 800, dryness: '辛口', variety: '甲州', feature: 'フレッシュですっきりとした辛口タイプ。' }
   ],
   glassRed: [
-    { name: 'ペイロタン ピノ・ノワール', origin: 'フランス', price: 800, body: 'ライト〜ミディアムボディ', feature: '品種:ピノ・ノワール' },
-    { name: 'ペイロタン シラー', origin: 'フランス', price: 800, body: 'ミディアムボディ', feature: '品種:シラー' },
-    { name: 'テラソス・ド・テージョ', origin: 'ポルトガル', price: 900, body: 'ミディアムボディ', feature: '品種:アラゴネス主体' },
-    { name: 'カザル・ダ・コエリェイラ', origin: 'ポルトガル', price: 1000, body: 'フルボディ', feature: '品種:トゥリガ・ナショナル、アリカンテ・ブーシェ、シラー' },
-    { name: 'ベンド カベルネ・ソーヴィニヨン', origin: 'アメリカ', price: 900, body: 'ミディアム〜フルボディ', feature: '品種:カベルネ・ソーヴィニヨン' },
-    { name: 'パヌール カベルネ・ソーヴィニヨン', origin: 'チリ', price: 900, body: 'フルボディ', feature: '品種:カベルネ・ソーヴィニヨン' }
+    { name: 'ペイロタン ピノ・ノワール', origin: 'フランス', price: 800, body: 'ライト〜ミディアムボディ', variety: 'ピノ・ノワール', feature: '' },
+    { name: 'ペイロタン シラー', origin: 'フランス', price: 800, body: 'ミディアムボディ', variety: 'シラー', feature: '' },
+    { name: 'テラソス・ド・テージョ', origin: 'ポルトガル', price: 900, body: 'ミディアムボディ', variety: 'アラゴネス主体', feature: '' },
+    { name: 'カザル・ダ・コエリェイラ', origin: 'ポルトガル', price: 1000, body: 'フルボディ', variety: 'トゥリガ・ナショナル、アリカンテ・ブーシェ、シラー', feature: '' },
+    { name: 'ベンド カベルネ・ソーヴィニヨン', origin: 'アメリカ', price: 900, body: 'ミディアム〜フルボディ', variety: 'カベルネ・ソーヴィニヨン', feature: '' },
+    { name: 'パヌール カベルネ・ソーヴィニヨン', origin: 'チリ', price: 900, body: 'フルボディ', variety: 'カベルネ・ソーヴィニヨン', feature: '' }
   ],
   sake: [
     { name: '純 特別純米酒', origin: '岩手県遠野市', price: 900, grade: '特別純米酒', feature: '遠野の米と水で醸された、芯のあるしっかりとした味わい' },
@@ -974,9 +1031,12 @@ function renderWineRow(cfg, item, i) {
         ${cfg.selectOptions.map(o => `<option value="${escapeHtml(o)}" ${item[cfg.selectField]===o?'selected':''}>${escapeHtml(o)}</option>`).join('')}
       </select>
     </td>` : '';
+  const varietyCell = cfg.hasVariety ? `
+    <td><input class="name-input" type="text" list="wine-variety-list" value="${escapeHtml(item.variety||'')}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'variety',this.value)"></td>` : '';
   return `<tr id="wine-row-${i}">
     <td>${wineWrapField(cfg, cfg.storeKey, i, 'name', item.name)}</td>
     <td>${wineOriginField(cfg, cfg.storeKey, i, item.origin)}</td>
+    ${varietyCell}
     <td class="right"><input class="qty-input" type="number" min="0" value="${item.price||0}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'price',this.value)" style="width:80px;text-align:right"></td>
     ${selectCell}
     <td>${wineWrapField(cfg, cfg.storeKey, i, 'feature', item.feature)}</td>
@@ -994,12 +1054,13 @@ function renderWinePanel(cat) {
   const items = wineData[cfg.storeKey];
   const sorted = sortedWineItems(items);
   const selectHeader = cfg.hasSelect ? `<th>${cfg.selectLabel}</th>` : '';
+  const varietyHeader = cfg.hasVariety ? `<th>品種</th>` : '';
   let rows;
   if (cfg.groupBySelect) {
     rows = cfg.selectOptions.map(opt => {
       const group = sorted.filter(({ item }) => (item[cfg.selectField] || cfg.selectOptions[0]) === opt);
       if (!group.length) return '';
-      const colspan = 4 + (cfg.hasSelect ? 1 : 0) + 1;
+      const colspan = 4 + (cfg.hasSelect ? 1 : 0) + (cfg.hasVariety ? 1 : 0) + 1;
       const groupRows = group.map(({ item, i }) => renderWineRow(cfg, item, i)).join('');
       return `<tr class="wine-group-header"><td colspan="${colspan}"><strong>${escapeHtml(opt)}ワイン</strong></td></tr>${groupRows}`;
     }).join('');
@@ -1018,8 +1079,9 @@ function renderWinePanel(cat) {
         </div>
       </div>
       <div class="form-row">
-        <input type="text" id="wf-name" placeholder="${cfg.idLabel}" onfocus="selAll(this)" />
+        <input type="text" id="wf-name" placeholder="${cfg.idLabel}" list="wine-name-list" onfocus="selAll(this)" />
         <input type="text" id="wf-origin" placeholder="${cfg.originLabel}" ${cfg.originLabel === '国名' ? 'list="wine-country-list"' : ''} onfocus="selAll(this)" />
+        ${cfg.hasVariety ? `<input type="text" id="wf-variety" placeholder="品種" list="wine-variety-list" onfocus="selAll(this)" />` : ''}
         <input type="number" id="wf-price" placeholder="価格" min="0" onfocus="selAll(this)" />
         ${cfg.hasSelect ? `<select id="wf-select">${cfg.selectOptions.map(o=>`<option value="${o}">${o}</option>`).join('')}</select>` : ''}
         <input type="text" id="wf-feature" placeholder="特徴" onfocus="selAll(this)" />
@@ -1033,12 +1095,19 @@ function renderWinePanel(cat) {
       </div>
       <table>
         <thead><tr>
-          <th>${cfg.idLabel}</th><th>${cfg.originLabel}</th><th class="right">価格</th>${selectHeader}<th>特徴</th><th></th>
+          <th>${cfg.idLabel}</th><th>${cfg.originLabel}</th>${varietyHeader}<th class="right">価格</th>${selectHeader}<th>特徴</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
   document.querySelectorAll('#panel textarea.wine-wrap').forEach(autoGrowWine);
+  refreshWineNameList(cfg.storeKey);
+}
+
+function refreshWineNameList(storeKey) {
+  const names = [...new Set(wineData[storeKey].map(x => x.name).filter(Boolean))];
+  document.getElementById('wine-name-list').innerHTML =
+    names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
 }
 
 function addWineItem(cat) {
@@ -1050,6 +1119,7 @@ function addWineItem(cat) {
   if (!name) { alert(`${cfg.idLabel}を入力してください`); return; }
   const item = { name, origin, price, feature };
   if (cfg.hasSelect) item[cfg.selectField] = document.getElementById('wf-select').value;
+  if (cfg.hasVariety) item.variety = document.getElementById('wf-variety').value.trim();
   wineData[cfg.storeKey].push(item);
   saveWineData();
   renderPanel();
@@ -1072,12 +1142,16 @@ function downloadWineCSV(cat) {
   const cfg = WINE_CONFIG[cat];
   const items = wineData[cfg.storeKey];
   let csv = '﻿';
-  const headers = [cfg.idLabel, cfg.originLabel, '価格'];
+  const headers = [cfg.idLabel, cfg.originLabel];
+  if (cfg.hasVariety) headers.push('品種');
+  headers.push('価格');
   if (cfg.hasSelect) headers.push(cfg.selectLabel);
   headers.push('特徴');
   csv += headers.join(',') + '\n';
   items.forEach(x => {
-    const row = [x.name, x.origin, x.price];
+    const row = [x.name, x.origin];
+    if (cfg.hasVariety) row.push(x.variety || '');
+    row.push(x.price);
     if (cfg.hasSelect) row.push(x[cfg.selectField] || '');
     row.push(x.feature || '');
     csv += row.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',') + '\n';
@@ -1093,6 +1167,7 @@ function downloadWineCSV(cat) {
 function wineMenuItemHTML(cfg, x, hideSelectInSub) {
   const subParts = [];
   if (x.origin) subParts.push(x.origin);
+  if (cfg.hasVariety && x.variety) subParts.push(x.variety);
   if (cfg.hasSelect && !hideSelectInSub && x[cfg.selectField]) subParts.push(x[cfg.selectField]);
   const sub = subParts.map(escapeHtml).join('　／　');
   return `
@@ -1157,12 +1232,15 @@ function openWineOcr(cat) {
   document.getElementById('wine-ocr-status').style.display = 'none';
   document.getElementById('wine-ocr-result').style.display = 'none';
   document.getElementById('wocr-name').value = '';
+  refreshWineNameList(cfg.storeKey);
   document.getElementById('wocr-origin').value = '';
   document.getElementById('wocr-origin').placeholder = cfg.originLabel;
   if (cfg.originLabel === '国名') document.getElementById('wocr-origin').setAttribute('list', 'wine-country-list');
   else document.getElementById('wocr-origin').removeAttribute('list');
   document.getElementById('wocr-price').value = '';
   document.getElementById('wocr-feature').value = '';
+  document.getElementById('wocr-variety').value = '';
+  document.getElementById('wocr-variety-row').style.display = cfg.hasVariety ? 'flex' : 'none';
   wineOcrLastText = '';
   const selectRow = document.getElementById('wocr-select-row');
   if (cfg.hasSelect) {
@@ -1201,7 +1279,9 @@ function loadWineImage(input) {
 }
 
 async function recognizeLabelText(src, onProgress) {
-  const { data: { text } } = await Tesseract.recognize(src, 'jpn+eng', {
+  const processed = await preprocessForOcr(src);
+  const { data: { text } } = await Tesseract.recognize(processed, 'jpn+eng', {
+    ...OCR_RECOGNIZE_OPTIONS,
     logger: m => {
       if (m.status === 'recognizing text' && onProgress) onProgress(Math.round(m.progress*100));
     }
@@ -1244,6 +1324,7 @@ function addFromWineOcr() {
   if (!name) { alert('品名を入力してください'); return; }
   const item = { name, origin, price, feature };
   if (cfg.hasSelect) item[cfg.selectField] = document.getElementById('wocr-select').value;
+  if (cfg.hasVariety) item.variety = document.getElementById('wocr-variety').value.trim();
   wineData[cfg.storeKey].push(item);
   saveWineData();
   closeWineOcr();
@@ -1413,6 +1494,8 @@ const now = new Date();
 const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 initMonth(thisMonth);
 loadWineData();
+document.getElementById('wine-variety-list').innerHTML =
+  WINE_VARIETY_LIST.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
 renderTabs();
 renderPanel();
 </script>
