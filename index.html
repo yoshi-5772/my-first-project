@@ -187,6 +187,7 @@
       .name-input, .qty-input { display: none !important; }
       .container { margin: 0; padding: 0; }
       .card { box-shadow: none; border: 1px solid #ccc; }
+      .no-print { display: none !important; }
     }
   </style>
 </head>
@@ -214,7 +215,7 @@
   <div class="grand-summary">
     <div class="items">
       <div>品目数: <strong id="g-items">0</strong> 種</div>
-      <div>合計数量: <strong id="g-qty">0</strong></div>
+      <div class="no-print">合計数量: <strong id="g-qty">0</strong></div>
     </div>
     <div class="grand-total">合計 ¥<span id="g-total">0</span>（税込）</div>
   </div>
