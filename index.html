@@ -302,8 +302,8 @@
   <option value="南アフリカ"></option>
   <option value="ポルトガル"></option>
 </datalist>
-<datalist id="wine-name-list"></datalist>
 <datalist id="wine-variety-list"></datalist>
+<datalist id="sake-rice-list"></datalist>
 <div id="print-combined"></div>
 
 <div class="container">
@@ -355,12 +355,13 @@
     <div class="ocr-result" id="wine-ocr-result" style="display:none"></div>
     <p style="font-size:0.85rem;color:#666;margin-bottom:10px;">読み取り結果を確認して各項目を入力してください</p>
     <div class="ocr-fields">
-      <input type="text" id="wocr-name" placeholder="品名" list="wine-name-list" onfocus="selAll(this)" />
+      <input type="text" id="wocr-name" placeholder="品名" onfocus="selAll(this)" style="flex:2" />
+      <select id="wocr-name-pick" onchange="pickWineText('wocr-name-pick','wocr-name')" title="登録済みの品名から選択" style="flex:none;width:34px;padding:4px 2px;color:#666"><option value="">▼</option></select>
       <input type="text" id="wocr-origin" placeholder="国名/産地" onfocus="selAll(this)" />
       <input type="number" id="wocr-price" placeholder="価格" min="0" onfocus="selAll(this)" />
     </div>
     <div class="ocr-fields" id="wocr-variety-row" style="display:none">
-      <input type="text" id="wocr-variety" placeholder="品種" list="wine-variety-list" onfocus="selAll(this)" style="flex:1" />
+      <input type="text" id="wocr-variety" placeholder="品種" onfocus="selAll(this)" style="flex:1" />
     </div>
     <div class="ocr-fields" id="wocr-select-row" style="display:none">
       <select id="wocr-select" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:0.9rem"></select>
@@ -932,19 +933,19 @@ function addFromOcr() {
 // ================== ワイン/日本酒リスト ==================
 const WINE_CONFIG = {
   'ワイン(ボトル)': {
-    storeKey: 'bottle', idLabel: '品名', originLabel: '国名', hasVariety: true,
+    storeKey: 'bottle', idLabel: '品名', originLabel: '国名', hasVariety: true, varietyListId: 'wine-variety-list',
     hasSelect: true, selectField: 'color', selectLabel: '種類', selectOptions: ['白','赤','ロゼ','スパークリング'], groupBySelect: true
   },
   'ワイン(グラス白)': {
-    storeKey: 'glassWhite', idLabel: '品名', originLabel: '国名', hasVariety: true,
+    storeKey: 'glassWhite', idLabel: '品名', originLabel: '国名', hasVariety: true, varietyListId: 'wine-variety-list',
     hasSelect: true, selectField: 'dryness', selectLabel: '甘辛', selectOptions: ['辛口','甘口']
   },
   'ワイン(グラス赤)': {
-    storeKey: 'glassRed', idLabel: '品名', originLabel: '国名', hasVariety: true,
+    storeKey: 'glassRed', idLabel: '品名', originLabel: '国名', hasVariety: true, varietyListId: 'wine-variety-list',
     hasSelect: true, selectField: 'body', selectLabel: 'ボディ', selectOptions: ['ライトボディ','ライト〜ミディアムボディ','ミディアムボディ','ミディアム〜フルボディ','フルボディ']
   },
   '日本酒': {
-    storeKey: 'sake', idLabel: '品名', originLabel: '産地',
+    storeKey: 'sake', idLabel: '品名', originLabel: '産地', hasVariety: true, varietyListId: 'sake-rice-list',
     hasSelect: true, selectField: 'grade', selectLabel: '種別', selectOptions: ['純米酒','特別純米酒','純米吟醸','純米大吟醸','本醸造','吟醸','大吟醸','普通酒']
   }
 };
@@ -953,7 +954,13 @@ const WINE_VARIETY_LIST = [
   'シャルドネ','ソーヴィニヨン・ブラン','リースリング','ピノ・グリ','甲州','ヴィオニエ',
   'カベルネ・ソーヴィニヨン','ピノ・ノワール','メルロー','シラー','サンジョヴェーゼ',
   'テンプラニーリョ','マルベック','グルナッシュ','ネッビオーロ','ジンファンデル',
-  'トゥリガ・ナショナル','マスカット・ベーリーA'
+  'トゥリガ・ナショナル','トゥーリガ・フランカ','アラゴネス','アリカンテ・ブーシェ',
+  'バガ','ロウレイロ','アルヴァリーニョ','エンクルザード','フェルナン・ピレス',
+  'マルヴァジア・フィナ','マスカット・ベーリーA'
+];
+
+const SAKE_RICE_LIST = [
+  '山田錦','五百万石','美山錦','雄町','愛山','出羽燦々','越淡麗','八反錦','亀の尾','ひとごこち'
 ];
 const WINE_STORE_KEY = 'winelist_v1';
 
@@ -1032,7 +1039,7 @@ function renderWineRow(cfg, item, i) {
       </select>
     </td>` : '';
   const varietyCell = cfg.hasVariety ? `
-    <td><input class="name-input" type="text" list="wine-variety-list" value="${escapeHtml(item.variety||'')}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'variety',this.value)"></td>` : '';
+    <td><input class="name-input" type="text" list="${cfg.varietyListId}" value="${escapeHtml(item.variety||'')}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'variety',this.value)"></td>` : '';
   return `<tr id="wine-row-${i}">
     <td>${wineWrapField(cfg, cfg.storeKey, i, 'name', item.name)}</td>
     <td>${wineOriginField(cfg, cfg.storeKey, i, item.origin)}</td>
@@ -1079,9 +1086,10 @@ function renderWinePanel(cat) {
         </div>
       </div>
       <div class="form-row">
-        <input type="text" id="wf-name" placeholder="${cfg.idLabel}" list="wine-name-list" onfocus="selAll(this)" />
+        <input type="text" id="wf-name" placeholder="${cfg.idLabel}" onfocus="selAll(this)" style="flex:2" />
+        <select id="wf-name-pick" onchange="pickWineText('wf-name-pick','wf-name')" title="登録済みの${cfg.idLabel}から選択" style="flex:none;width:34px;padding:4px 2px;color:#666"><option value="">▼</option></select>
         <input type="text" id="wf-origin" placeholder="${cfg.originLabel}" ${cfg.originLabel === '国名' ? 'list="wine-country-list"' : ''} onfocus="selAll(this)" />
-        ${cfg.hasVariety ? `<input type="text" id="wf-variety" placeholder="品種" list="wine-variety-list" onfocus="selAll(this)" />` : ''}
+        ${cfg.hasVariety ? `<input type="text" id="wf-variety" placeholder="品種" list="${cfg.varietyListId}" onfocus="selAll(this)" />` : ''}
         <input type="number" id="wf-price" placeholder="価格" min="0" onfocus="selAll(this)" />
         ${cfg.hasSelect ? `<select id="wf-select">${cfg.selectOptions.map(o=>`<option value="${o}">${o}</option>`).join('')}</select>` : ''}
         <input type="text" id="wf-feature" placeholder="特徴" onfocus="selAll(this)" />
@@ -1106,8 +1114,19 @@ function renderWinePanel(cat) {
 
 function refreshWineNameList(storeKey) {
   const names = [...new Set(wineData[storeKey].map(x => x.name).filter(Boolean))];
-  document.getElementById('wine-name-list').innerHTML =
-    names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+  const optionsHtml = '<option value="">▼</option>' +
+    names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  ['wf-name-pick', 'wocr-name-pick'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = optionsHtml;
+  });
+}
+
+// 「▼」選択欄で選んだ値をテキスト欄にコピーする（品名を確実にタップで選べるようにするため）
+function pickWineText(selectId, inputId) {
+  const sel = document.getElementById(selectId);
+  if (sel.value) document.getElementById(inputId).value = sel.value;
+  sel.selectedIndex = 0;
 }
 
 function addWineItem(cat) {
@@ -1241,6 +1260,8 @@ function openWineOcr(cat) {
   document.getElementById('wocr-feature').value = '';
   document.getElementById('wocr-variety').value = '';
   document.getElementById('wocr-variety-row').style.display = cfg.hasVariety ? 'flex' : 'none';
+  if (cfg.hasVariety) document.getElementById('wocr-variety').setAttribute('list', cfg.varietyListId);
+  else document.getElementById('wocr-variety').removeAttribute('list');
   wineOcrLastText = '';
   const selectRow = document.getElementById('wocr-select-row');
   if (cfg.hasSelect) {
@@ -1496,6 +1517,8 @@ initMonth(thisMonth);
 loadWineData();
 document.getElementById('wine-variety-list').innerHTML =
   WINE_VARIETY_LIST.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
+document.getElementById('sake-rice-list').innerHTML =
+  SAKE_RICE_LIST.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
 renderTabs();
 renderPanel();
 </script>
