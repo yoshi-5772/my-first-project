@@ -355,19 +355,19 @@
     <div class="ocr-result" id="wine-ocr-result" style="display:none"></div>
     <p style="font-size:0.85rem;color:#666;margin-bottom:10px;">読み取り結果を確認して各項目を入力してください</p>
     <div class="ocr-fields">
-      <input type="text" id="wocr-name" placeholder="品名" onfocus="selAll(this)" style="flex:2" />
+      <input type="text" id="wocr-name" placeholder="品名" style="flex:2" />
       <select id="wocr-name-pick" onchange="pickWineText('wocr-name-pick','wocr-name')" title="登録済みの品名から選択" style="flex:none;width:34px;padding:4px 2px;color:#666"><option value="">▼</option></select>
-      <input type="text" id="wocr-origin" placeholder="国名/産地" onfocus="selAll(this)" />
-      <input type="number" id="wocr-price" placeholder="価格" min="0" onfocus="selAll(this)" />
+      <input type="text" id="wocr-origin" placeholder="国名/産地" />
+      <input type="number" id="wocr-price" placeholder="価格" min="0" />
     </div>
     <div class="ocr-fields" id="wocr-variety-row" style="display:none">
-      <input type="text" id="wocr-variety" placeholder="品種" onfocus="selAll(this)" style="flex:1" />
+      <input type="text" id="wocr-variety" placeholder="品種" style="flex:1" />
     </div>
     <div class="ocr-fields" id="wocr-select-row" style="display:none">
       <select id="wocr-select" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:0.9rem"></select>
     </div>
     <div class="ocr-fields">
-      <input type="text" id="wocr-feature" placeholder="特徴" onfocus="selAll(this)" style="flex:1" />
+      <input type="text" id="wocr-feature" placeholder="特徴" style="flex:1" />
       <button class="btn btn-blue" onclick="generateFeatureAI(event)">🤖 AIで特徴を生成</button>
     </div>
     <div style="font-size:0.8rem;color:#888;margin-bottom:12px;">追加先: <strong id="wocr-cat"></strong></div>
@@ -982,12 +982,12 @@ const WINE_SEED_DATA = {
     { name: 'マンズワイン 甲州 シュール・リー ティエラ', origin: '日本・山梨', price: 800, dryness: '辛口', variety: '甲州', feature: 'フレッシュですっきりとした辛口タイプ。' }
   ],
   glassRed: [
-    { name: 'ペイロタン ピノ・ノワール', origin: 'フランス', price: 800, body: 'ライト〜ミディアムボディ', variety: 'ピノ・ノワール', feature: '' },
-    { name: 'ペイロタン シラー', origin: 'フランス', price: 800, body: 'ミディアムボディ', variety: 'シラー', feature: '' },
-    { name: 'テラソス・ド・テージョ', origin: 'ポルトガル', price: 900, body: 'ミディアムボディ', variety: 'アラゴネス主体', feature: '' },
-    { name: 'カザル・ダ・コエリェイラ', origin: 'ポルトガル', price: 1000, body: 'フルボディ', variety: 'トゥリガ・ナショナル、アリカンテ・ブーシェ、シラー', feature: '' },
-    { name: 'ベンド カベルネ・ソーヴィニヨン', origin: 'アメリカ', price: 900, body: 'ミディアム〜フルボディ', variety: 'カベルネ・ソーヴィニヨン', feature: '' },
-    { name: 'パヌール カベルネ・ソーヴィニヨン', origin: 'チリ', price: 900, body: 'フルボディ', variety: 'カベルネ・ソーヴィニヨン', feature: '' }
+    { name: 'ペイロタン ピノ・ノワール', origin: 'フランス', price: 800, body: 'ライト〜ミディアムボディ', variety: 'ピノ・ノワール', feature: 'フランス産ピノ・ノワールらしい、赤系果実の華やかな香りと柔らかな酸味が魅力の軽やかな一杯です。' },
+    { name: 'ペイロタン シラー', origin: 'フランス', price: 800, body: 'ミディアムボディ', variety: 'シラー', feature: '黒胡椒を思わせるスパイシーな香りと、しっかりとした果実味が調和したミディアムボディです。' },
+    { name: 'テラソス・ド・テージョ', origin: 'ポルトガル', price: 900, body: 'ミディアムボディ', variety: 'アラゴネス主体', feature: 'ポルトガル・テージョ地方らしい、熟した果実味と柔らかなタンニンが特徴の飲みやすいミディアムボディです。' },
+    { name: 'カザル・ダ・コエリェイラ', origin: 'ポルトガル', price: 1000, body: 'フルボディ', variety: 'トゥリガ・ナショナル、アリカンテ・ブーシェ、シラー', feature: 'トゥリガ・ナショナルなどをブレンドした、力強い骨格と凝縮感のあるフルボディです。' },
+    { name: 'ベンド カベルネ・ソーヴィニヨン', origin: 'アメリカ', price: 900, body: 'ミディアム〜フルボディ', variety: 'カベルネ・ソーヴィニヨン', feature: 'カリフォルニアらしい、黒系果実の凝縮感としっかりとしたタンニンが楽しめる一杯です。' },
+    { name: 'パヌール カベルネ・ソーヴィニヨン', origin: 'チリ', price: 900, body: 'フルボディ', variety: 'カベルネ・ソーヴィニヨン', feature: 'チリらしい凝縮感のある果実味と、力強いタンニンが特徴のフルボディです。' }
   ],
   sake: [
     { name: '純 特別純米酒', origin: '岩手県遠野市', price: 900, grade: '特別純米酒', feature: '遠野の米と水で醸された、芯のあるしっかりとした味わい' },
@@ -999,6 +999,37 @@ const WINE_SEED_DATA = {
   ]
 };
 
+// 品種欄を追加する前から使われていたデータに、品種・特徴を後から補う
+const KNOWN_FEATURE_TEXT = {
+  glassRed: {
+    'ペイロタン ピノ・ノワール': 'フランス産ピノ・ノワールらしい、赤系果実の華やかな香りと柔らかな酸味が魅力の軽やかな一杯です。',
+    'ペイロタン シラー': '黒胡椒を思わせるスパイシーな香りと、しっかりとした果実味が調和したミディアムボディです。',
+    'テラソス・ド・テージョ': 'ポルトガル・テージョ地方らしい、熟した果実味と柔らかなタンニンが特徴の飲みやすいミディアムボディです。',
+    'カザル・ダ・コエリェイラ': 'トゥリガ・ナショナルなどをブレンドした、力強い骨格と凝縮感のあるフルボディです。',
+    'ベンド カベルネ・ソーヴィニヨン': 'カリフォルニアらしい、黒系果実の凝縮感としっかりとしたタンニンが楽しめる一杯です。',
+    'パヌール カベルネ・ソーヴィニヨン': 'チリらしい凝縮感のある果実味と、力強いタンニンが特徴のフルボディです。'
+  }
+};
+
+function migrateWineItem(cfg, item) {
+  if (cfg.hasVariety && !item.variety) {
+    const list = cfg.varietyListId === 'sake-rice-list' ? SAKE_RICE_LIST : WINE_VARIETY_LIST;
+    const m = (item.feature || '').match(/品種[:：]\s*([^。\n]+)/);
+    if (m) {
+      const extracted = m[1].trim();
+      item.variety = list.find(v => extracted.includes(v)) || extracted.split(/[（(]/)[0].trim();
+      item.feature = item.feature.replace(/品種[:：]\s*[^。\n]+。?/, '').trim();
+    } else {
+      const found = list.find(v => item.name && item.name.includes(v));
+      if (found) item.variety = found;
+    }
+  }
+  if (!item.feature) {
+    const known = KNOWN_FEATURE_TEXT[cfg.storeKey];
+    if (known && known[item.name]) item.feature = known[item.name];
+  }
+}
+
 let wineData = {};
 function loadWineData() {
   let saved = null;
@@ -1008,7 +1039,9 @@ function loadWineData() {
     wineData = saved;
     Object.values(WINE_CONFIG).forEach(cfg => {
       if (!wineData[cfg.storeKey]) wineData[cfg.storeKey] = [];
+      wineData[cfg.storeKey].forEach(item => migrateWineItem(cfg, item));
     });
+    saveWineData();
   } else {
     wineData = JSON.parse(JSON.stringify(WINE_SEED_DATA));
     saveWineData();
@@ -1021,12 +1054,12 @@ function setWineSortOrder(val) { wineSortOrder = val; renderPanel(); }
 function sortedWineItems(items) { return sortByCommonOrder(items, wineSortOrder); }
 
 function wineWrapField(cfg, storeKey, i, field, value, placeholder) {
-  return `<textarea class="name-input wine-wrap" rows="1" placeholder="${placeholder||''}" onfocus="selAll(this)" oninput="updateWineField('${storeKey}',${i},'${field}',this.value);autoGrowWine(this)">${escapeHtml(value||'')}</textarea>`;
+  return `<textarea class="name-input wine-wrap" rows="1" placeholder="${placeholder||''}" oninput="updateWineField('${storeKey}',${i},'${field}',this.value);autoGrowWine(this)">${escapeHtml(value||'')}</textarea>`;
 }
 
 function wineOriginField(cfg, storeKey, i, value) {
   if (cfg.originLabel === '国名') {
-    return `<input class="name-input" type="text" list="wine-country-list" value="${escapeHtml(value||'')}" onfocus="selAll(this)" oninput="updateWineField('${storeKey}',${i},'origin',this.value)">`;
+    return `<input class="name-input" type="text" list="wine-country-list" value="${escapeHtml(value||'')}" oninput="updateWineField('${storeKey}',${i},'origin',this.value)">`;
   }
   return wineWrapField(cfg, storeKey, i, 'origin', value);
 }
@@ -1039,12 +1072,12 @@ function renderWineRow(cfg, item, i) {
       </select>
     </td>` : '';
   const varietyCell = cfg.hasVariety ? `
-    <td><input class="name-input" type="text" list="${cfg.varietyListId}" value="${escapeHtml(item.variety||'')}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'variety',this.value)"></td>` : '';
+    <td><input class="name-input" type="text" list="${cfg.varietyListId}" value="${escapeHtml(item.variety||'')}" oninput="updateWineField('${cfg.storeKey}',${i},'variety',this.value)"></td>` : '';
   return `<tr id="wine-row-${i}">
     <td>${wineWrapField(cfg, cfg.storeKey, i, 'name', item.name)}</td>
     <td>${wineOriginField(cfg, cfg.storeKey, i, item.origin)}</td>
     ${varietyCell}
-    <td class="right"><input class="qty-input" type="number" min="0" value="${item.price||0}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'price',this.value)" style="width:80px;text-align:right"></td>
+    <td class="right"><input class="qty-input" type="number" min="0" value="${item.price||0}" oninput="updateWineField('${cfg.storeKey}',${i},'price',this.value)" style="width:80px;text-align:right"></td>
     ${selectCell}
     <td>${wineWrapField(cfg, cfg.storeKey, i, 'feature', item.feature)}</td>
     <td><button class="btn-del" onclick="delWineItem('${cfg.storeKey}',${i})">削除</button></td>
@@ -1086,13 +1119,13 @@ function renderWinePanel(cat) {
         </div>
       </div>
       <div class="form-row">
-        <input type="text" id="wf-name" placeholder="${cfg.idLabel}" onfocus="selAll(this)" style="flex:2" />
+        <input type="text" id="wf-name" placeholder="${cfg.idLabel}" style="flex:2" />
         <select id="wf-name-pick" onchange="pickWineText('wf-name-pick','wf-name')" title="登録済みの${cfg.idLabel}から選択" style="flex:none;width:34px;padding:4px 2px;color:#666"><option value="">▼</option></select>
-        <input type="text" id="wf-origin" placeholder="${cfg.originLabel}" ${cfg.originLabel === '国名' ? 'list="wine-country-list"' : ''} onfocus="selAll(this)" />
-        ${cfg.hasVariety ? `<input type="text" id="wf-variety" placeholder="品種" list="${cfg.varietyListId}" onfocus="selAll(this)" />` : ''}
-        <input type="number" id="wf-price" placeholder="価格" min="0" onfocus="selAll(this)" />
+        <input type="text" id="wf-origin" placeholder="${cfg.originLabel}" ${cfg.originLabel === '国名' ? 'list="wine-country-list"' : ''} />
+        ${cfg.hasVariety ? `<input type="text" id="wf-variety" placeholder="品種" list="${cfg.varietyListId}" />` : ''}
+        <input type="number" id="wf-price" placeholder="価格" min="0" />
         ${cfg.hasSelect ? `<select id="wf-select">${cfg.selectOptions.map(o=>`<option value="${o}">${o}</option>`).join('')}</select>` : ''}
-        <input type="text" id="wf-feature" placeholder="特徴" onfocus="selAll(this)" />
+        <input type="text" id="wf-feature" placeholder="特徴" />
         <button class="btn btn-green" onclick="addWineItem('${cat}')">追加</button>
         <select onchange="setWineSortOrder(this.value)" style="flex:none;padding:7px 8px;border:1px solid #ccc;border-radius:5px;font-size:0.85rem;color:#444">
           <option value="default" ${wineSortOrder==='default'?'selected':''}>登録順</option>
