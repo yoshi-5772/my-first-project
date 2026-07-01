@@ -194,28 +194,70 @@
       max-width: 720px;
       margin: 0 auto;
       color: #2a2a2a;
+      position: relative;
+      border: 1px solid #c9a86a;
+      padding: 36px 42px 30px;
+    }
+    #print-combined .menu-print::before {
+      content: '';
+      position: absolute;
+      inset: 7px;
+      border: 1px solid #c9a86a;
+      pointer-events: none;
     }
     #print-combined .menu-print h1 {
       text-align: center;
       font-size: 1.9rem;
-      letter-spacing: 0.35em;
+      letter-spacing: 0.4em;
       font-weight: 600;
-      margin: 8px 0 26px;
-      padding-bottom: 14px;
-      border-bottom: 2px solid #1e5631;
+      margin: 4px 0 2px;
+      color: #1a1a1a;
+    }
+    #print-combined .menu-print .menu-subtitle {
+      text-align: center;
+      font-size: 0.66rem;
+      letter-spacing: 0.4em;
+      color: #b08d3f;
+      margin: 0 0 16px;
+      font-family: Georgia, 'Times New Roman', serif;
+    }
+    #print-combined .menu-print .menu-divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 22px;
+    }
+    #print-combined .menu-print .menu-divider:last-child { margin: 22px 0 0; }
+    #print-combined .menu-print .menu-divider span {
+      flex: 1;
+      height: 1px;
+      background: #c9a86a;
+    }
+    #print-combined .menu-print .menu-divider i {
+      font-style: normal;
+      color: #b08d3f;
+      font-size: 0.7rem;
     }
     #print-combined .menu-print h2 {
-      font-size: 1.05rem;
-      letter-spacing: 0.12em;
-      color: #1e5631;
-      border-bottom: 1px solid #b7d6bf;
-      padding-bottom: 6px;
-      margin: 30px 0 14px;
+      font-size: 1rem;
+      letter-spacing: 0.3em;
+      color: #6b5122;
+      text-align: center;
+      margin: 32px 0 18px;
       font-weight: 600;
+      position: relative;
+    }
+    #print-combined .menu-print h2::after {
+      content: '';
+      display: block;
+      width: 54px;
+      height: 1px;
+      background: #c9a86a;
+      margin: 9px auto 0;
     }
     #print-combined .menu-item {
-      padding: 10px 0;
-      border-bottom: 1px dotted #ddd;
+      padding: 13px 0;
+      border-bottom: 1px dotted #d9c9a0;
     }
     #print-combined .menu-item:last-child { border-bottom: none; }
     #print-combined .menu-item-head {
@@ -227,25 +269,27 @@
     #print-combined .menu-item-name {
       font-size: 1.05rem;
       font-weight: 700;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.03em;
     }
     #print-combined .menu-item-price {
       font-size: 1rem;
       font-weight: 600;
       white-space: nowrap;
       font-family: Georgia, 'Times New Roman', serif;
+      font-style: italic;
+      color: #6b5122;
     }
     #print-combined .menu-item-sub {
-      font-size: 0.78rem;
-      color: #888;
-      letter-spacing: 0.03em;
-      margin-top: 2px;
+      font-size: 0.76rem;
+      color: #a3874f;
+      letter-spacing: 0.04em;
+      margin-top: 3px;
     }
     #print-combined .menu-item-feature {
       font-size: 0.82rem;
       color: #555;
-      margin-top: 4px;
-      line-height: 1.6;
+      margin-top: 5px;
+      line-height: 1.7;
     }
     @page { margin: 1cm; size: auto; }
     @media print {
@@ -945,7 +989,7 @@ function addFromOcr() {
 const WINE_CONFIG = {
   'ワイン(ボトル)': {
     storeKey: 'bottle', idLabel: '品名', originLabel: '国名', hasVariety: true, varietyListId: 'wine-variety-list',
-    hasSelect: true, selectField: 'color', selectLabel: '種類', selectOptions: ['白','赤','ロゼ','スパークリング'], groupBySelect: true
+    hasSelect: true, selectField: 'color', selectLabel: '種類', selectOptions: ['白','赤','ロゼ','スパークリング'], groupBySelect: true, groupLabel: 'ワイン'
   },
   'ワイン(グラス白)': {
     storeKey: 'glassWhite', idLabel: '品名', originLabel: '国名', hasVariety: true, varietyListId: 'wine-variety-list',
@@ -957,7 +1001,7 @@ const WINE_CONFIG = {
   },
   '日本酒': {
     storeKey: 'sake', idLabel: '品名', originLabel: '産地', hasVariety: true, varietyListId: 'sake-rice-list',
-    hasSelect: true, selectField: 'grade', selectLabel: '種別', selectOptions: ['純米酒','特別純米酒','純米吟醸','純米大吟醸','本醸造','吟醸','大吟醸','普通酒']
+    hasSelect: true, selectField: 'grade', selectLabel: '種別', selectOptions: ['純米大吟醸','大吟醸','純米吟醸','吟醸','特別純米酒','純米酒','本醸造','普通酒'], groupBySelect: true
   }
 };
 
@@ -1145,7 +1189,8 @@ function renderWinePanel(cat) {
       if (!group.length) return '';
       const colspan = 4 + (cfg.hasSelect ? 1 : 0) + (cfg.hasVariety ? 1 : 0) + 1;
       const groupRows = group.map(({ item, i }) => renderWineRow(cfg, item, i)).join('');
-      return `<tr class="wine-group-header"><td colspan="${colspan}"><strong>${escapeHtml(opt)}ワイン</strong></td></tr>${groupRows}`;
+      const groupTitle = cfg.groupLabel ? `${opt}${cfg.groupLabel}` : opt;
+      return `<tr class="wine-group-header"><td colspan="${colspan}"><strong>${escapeHtml(groupTitle)}</strong></td></tr>${groupRows}`;
     }).join('');
   } else {
     rows = sorted.map(({ item, i }) => renderWineRow(cfg, item, i)).join('');
@@ -1284,7 +1329,8 @@ function wineSectionHTML(cat, sectionLabel) {
       const group = items.filter(x => (x[cfg.selectField] || cfg.selectOptions[0]) === opt);
       if (!group.length) return '';
       const itemsHtml = group.map(x => wineMenuItemHTML(cfg, x, true)).join('');
-      return `<h2>${escapeHtml(opt)}ワイン</h2><div class="menu-section">${itemsHtml}</div>`;
+      const groupTitle = cfg.groupLabel ? `${opt}${cfg.groupLabel}` : opt;
+      return `<h2>${escapeHtml(groupTitle)}</h2><div class="menu-section">${itemsHtml}</div>`;
     }).join('');
   }
   const itemsHtml = items.map(x => wineMenuItemHTML(cfg, x)).join('');
@@ -1326,9 +1372,16 @@ function fitPrintToOnePage() {
   container.style.width = prev.width;
 }
 
-function showWineMenuPrint(title, bodyHtml) {
+function showWineMenuPrint(title, bodyHtml, subtitle) {
   const container = document.getElementById('print-combined');
-  container.innerHTML = `<div class="menu-print"><h1>${escapeHtml(title)}</h1>${bodyHtml}</div>`;
+  const divider = '<div class="menu-divider"><span></span><i>◆</i><span></span></div>';
+  container.innerHTML = `<div class="menu-print">
+      <h1>${escapeHtml(title)}</h1>
+      ${subtitle ? `<div class="menu-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+      ${divider}
+      ${bodyHtml}
+      ${divider}
+    </div>`;
   document.body.classList.add('print-mode-combined');
   fitPrintToOnePage();
   window.print();
@@ -1337,13 +1390,15 @@ function showWineMenuPrint(title, bodyHtml) {
 function printGlassWine() {
   showWineMenuPrint('グラスワイン',
     wineSectionHTML('ワイン(グラス白)', '白ワイン / White Wine') +
-    wineSectionHTML('ワイン(グラス赤)', '赤ワイン / Red Wine'));
+    wineSectionHTML('ワイン(グラス赤)', '赤ワイン / Red Wine'),
+    'GLASS WINE');
 }
 
 const WINE_PRINT_TITLES = { 'ワイン(ボトル)': 'ボトルワイン', '日本酒': '日本酒' };
+const WINE_PRINT_SUBTITLES = { 'ワイン(ボトル)': 'BOTTLE WINE', '日本酒': 'SAKE' };
 function printWineTab(cat) {
   if (cat === 'ワイン(グラス白)' || cat === 'ワイン(グラス赤)') { printGlassWine(); return; }
-  showWineMenuPrint(WINE_PRINT_TITLES[cat] || cat, wineSectionHTML(cat, null));
+  showWineMenuPrint(WINE_PRINT_TITLES[cat] || cat, wineSectionHTML(cat, null), WINE_PRINT_SUBTITLES[cat]);
 }
 
 window.addEventListener('afterprint', () => {
