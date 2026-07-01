@@ -1293,10 +1293,44 @@ function wineSectionHTML(cat, sectionLabel) {
     <div class="menu-section">${itemsHtml}</div>`;
 }
 
+// 印刷内容が1ページに収まらない場合、はみ出た分だけ縮小してちょうど1枚に収める
+function fitPrintToOnePage() {
+  const container = document.getElementById('print-combined');
+  const menu = container.querySelector('.menu-print');
+  if (!menu) return;
+  menu.style.zoom = '1';
+
+  // 画面上は#print-combinedがdisplay:noneのため、計測のあいだだけ
+  // 画面には見えない形（visibility:hidden・画面外配置）で一時的にレイアウトさせる
+  const prev = { display: container.style.display, position: container.style.position,
+    visibility: container.style.visibility, left: container.style.left, width: container.style.width };
+  container.style.display = 'block';
+  container.style.position = 'fixed';
+  container.style.visibility = 'hidden';
+  container.style.left = '-9999px';
+  container.style.width = '720px';
+
+  const mmToPx = 96 / 25.4;
+  // A4縦 - 上下1cmずつのページ余白。環境によるレンダリング誤差を見込んで少し余裕を持たせる
+  const pageHeightPx = (297 - 20) * mmToPx * 0.92;
+  const contentHeight = menu.scrollHeight;
+  if (contentHeight > pageHeightPx) {
+    const scale = Math.max(0.4, pageHeightPx / contentHeight);
+    menu.style.zoom = scale;
+  }
+
+  container.style.display = prev.display;
+  container.style.position = prev.position;
+  container.style.visibility = prev.visibility;
+  container.style.left = prev.left;
+  container.style.width = prev.width;
+}
+
 function showWineMenuPrint(title, bodyHtml) {
   const container = document.getElementById('print-combined');
   container.innerHTML = `<div class="menu-print"><h1>${escapeHtml(title)}</h1>${bodyHtml}</div>`;
   document.body.classList.add('print-mode-combined');
+  fitPrintToOnePage();
   window.print();
 }
 
@@ -1314,6 +1348,8 @@ function printWineTab(cat) {
 
 window.addEventListener('afterprint', () => {
   document.body.classList.remove('print-mode-combined');
+  const menu = document.querySelector('#print-combined .menu-print');
+  if (menu) menu.style.zoom = '1';
 });
 
 // ---- ワイン/日本酒 OCR ----
