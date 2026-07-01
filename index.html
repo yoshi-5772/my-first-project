@@ -288,6 +288,20 @@
 
 <div class="tabs" id="tabs"></div>
 <div class="print-title" id="main-print-title">棚卸し表 — Golot</div>
+<datalist id="wine-country-list">
+  <option value="日本"></option>
+  <option value="フランス"></option>
+  <option value="イタリア"></option>
+  <option value="スペイン"></option>
+  <option value="ドイツ"></option>
+  <option value="アメリカ"></option>
+  <option value="チリ"></option>
+  <option value="アルゼンチン"></option>
+  <option value="オーストラリア"></option>
+  <option value="ニュージーランド"></option>
+  <option value="南アフリカ"></option>
+  <option value="ポルトガル"></option>
+</datalist>
 <div id="print-combined"></div>
 
 <div class="container">
@@ -869,7 +883,7 @@ function addFromOcr() {
 const WINE_CONFIG = {
   'ワイン(ボトル)': {
     storeKey: 'bottle', idLabel: '品名', originLabel: '国名',
-    hasSelect: true, selectField: 'color', selectLabel: '種類', selectOptions: ['白','赤'], groupBySelect: true
+    hasSelect: true, selectField: 'color', selectLabel: '種類', selectOptions: ['白','赤','ロゼ','スパークリング'], groupBySelect: true
   },
   'ワイン(グラス白)': {
     storeKey: 'glassWhite', idLabel: '品名', originLabel: '国名',
@@ -946,6 +960,13 @@ function wineWrapField(cfg, storeKey, i, field, value, placeholder) {
   return `<textarea class="name-input wine-wrap" rows="1" placeholder="${placeholder||''}" onfocus="selAll(this)" oninput="updateWineField('${storeKey}',${i},'${field}',this.value);autoGrowWine(this)">${escapeHtml(value||'')}</textarea>`;
 }
 
+function wineOriginField(cfg, storeKey, i, value) {
+  if (cfg.originLabel === '国名') {
+    return `<input class="name-input" type="text" list="wine-country-list" value="${escapeHtml(value||'')}" onfocus="selAll(this)" oninput="updateWineField('${storeKey}',${i},'origin',this.value)">`;
+  }
+  return wineWrapField(cfg, storeKey, i, 'origin', value);
+}
+
 function renderWineRow(cfg, item, i) {
   const selectCell = cfg.hasSelect ? `
     <td>
@@ -955,7 +976,7 @@ function renderWineRow(cfg, item, i) {
     </td>` : '';
   return `<tr id="wine-row-${i}">
     <td>${wineWrapField(cfg, cfg.storeKey, i, 'name', item.name)}</td>
-    <td>${wineWrapField(cfg, cfg.storeKey, i, 'origin', item.origin)}</td>
+    <td>${wineOriginField(cfg, cfg.storeKey, i, item.origin)}</td>
     <td class="right"><input class="qty-input" type="number" min="0" value="${item.price||0}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'price',this.value)" style="width:80px;text-align:right"></td>
     ${selectCell}
     <td>${wineWrapField(cfg, cfg.storeKey, i, 'feature', item.feature)}</td>
@@ -998,7 +1019,7 @@ function renderWinePanel(cat) {
       </div>
       <div class="form-row">
         <input type="text" id="wf-name" placeholder="${cfg.idLabel}" onfocus="selAll(this)" />
-        <input type="text" id="wf-origin" placeholder="${cfg.originLabel}" onfocus="selAll(this)" />
+        <input type="text" id="wf-origin" placeholder="${cfg.originLabel}" ${cfg.originLabel === '国名' ? 'list="wine-country-list"' : ''} onfocus="selAll(this)" />
         <input type="number" id="wf-price" placeholder="価格" min="0" onfocus="selAll(this)" />
         ${cfg.hasSelect ? `<select id="wf-select">${cfg.selectOptions.map(o=>`<option value="${o}">${o}</option>`).join('')}</select>` : ''}
         <input type="text" id="wf-feature" placeholder="特徴" onfocus="selAll(this)" />
@@ -1137,6 +1158,9 @@ function openWineOcr(cat) {
   document.getElementById('wine-ocr-result').style.display = 'none';
   document.getElementById('wocr-name').value = '';
   document.getElementById('wocr-origin').value = '';
+  document.getElementById('wocr-origin').placeholder = cfg.originLabel;
+  if (cfg.originLabel === '国名') document.getElementById('wocr-origin').setAttribute('list', 'wine-country-list');
+  else document.getElementById('wocr-origin').removeAttribute('list');
   document.getElementById('wocr-price').value = '';
   document.getElementById('wocr-feature').value = '';
   wineOcrLastText = '';
