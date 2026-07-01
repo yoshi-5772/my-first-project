@@ -1502,26 +1502,13 @@ dz.addEventListener('drop', e => {
   }
 });
 
-// フォーカス時：前の値を記憶し、クリアを試みる＋「最初の入力」フラグを立てる
+// フォーカス時：前の値を記憶し、全選択状態にする（次の入力で自動的に上書きされる）
+// value=''でクリアする方式は、モバイル環境でクリアと入力が競合し前の値が残ることがあるため、
+// select()で全選択にして「打てば置き換わる」ネイティブな挙動に任せる
 function selAll(el) {
   el.dataset.prev = el.value;
-  el.dataset.fresh = '1';
-  el.value = '';
+  setTimeout(() => el.select(), 0);
 }
-
-// 最初の1文字入力時に、もし前の値が消えずに残っていたら取り除く（モバイル対策）
-// capture段階で実行し、updatePrice/updateQtyより先に値を補正する
-document.getElementById('panel').addEventListener('input', e => {
-  const el = e.target;
-  if (!el.classList.contains('qty-input')) return;
-  if (el.dataset.fresh !== '1') return;
-  el.dataset.fresh = '';
-  const prev = el.dataset.prev || '';
-  // 前の値が残ったまま新しい文字が後ろに付いた場合（例: "4"→"47"）、前の値を削る
-  if (prev && el.value.length > prev.length && el.value.startsWith(prev)) {
-    el.value = el.value.slice(prev.length);
-  }
-}, true);
 // フォーカスが外れたとき、未入力なら元の値に戻す
 function blurNum(el, cat, i, type) {
   if (el.value !== '') return;
