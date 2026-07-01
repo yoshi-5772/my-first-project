@@ -261,7 +261,11 @@
       body.print-mode-combined #main-print-title { display: none !important; }
       body.print-mode-combined .container { display: none !important; }
       body.print-mode-combined { background: #fff !important; }
-      body.print-mode-combined #print-combined { display: block !important; padding: 0 14px; }
+      body.print-mode-combined #print-combined {
+        display: flex !important; flex-direction: column; justify-content: center;
+        min-height: 100vh; padding: 0 14px; box-sizing: border-box;
+      }
+      body.print-mode-combined #print-combined .menu-print { width: 100%; }
     }
   </style>
 </head>
