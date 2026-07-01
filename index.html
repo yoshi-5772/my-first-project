@@ -178,6 +178,7 @@
     .print-name { display: none; }
     .print-val { display: none; }
     .print-title { display: none; }
+    #print-combined { display: none; }
     @page { margin: 1cm; size: auto; }
     @media print {
       header, .tabs, .form-row, .top-btns, .btn, .btn-del, .modal-bg { display: none !important; }
@@ -189,6 +190,9 @@
       .container { margin: 0; padding: 0; }
       .card { box-shadow: none; border: 1px solid #ccc; }
       .no-print { display: none !important; }
+      body.print-mode-combined #main-print-title { display: none !important; }
+      body.print-mode-combined .container { display: none !important; }
+      body.print-mode-combined #print-combined { display: block !important; padding: 0 14px; }
     }
   </style>
 </head>
@@ -204,12 +208,14 @@
     <label class="btn" style="background:rgba(255,255,255,0.12);color:#fff;padding:5px 10px;font-size:0.8rem;cursor:pointer">
       📂 復元<input type="file" accept=".json" style="display:none" onchange="importBackup(this)">
     </label>
+    <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px;font-size:0.8rem" onclick="setAiApiKey()">🤖 AI設定</button>
     <span id="backup-status" style="font-size:0.72rem;opacity:0.75;white-space:nowrap"></span>
   </div>
 </header>
 
 <div class="tabs" id="tabs"></div>
-<div class="print-title">棚卸し表 — Golot</div>
+<div class="print-title" id="main-print-title">棚卸し表 — Golot</div>
+<div id="print-combined"></div>
 
 <div class="container">
   <div id="panel"></div>
@@ -247,6 +253,37 @@
   </div>
 </div>
 
+<!-- ワイン/日本酒 OCRモーダル -->
+<div class="modal-bg" id="wine-ocr-modal">
+  <div class="modal">
+    <h3>写真から品目を追加</h3>
+    <div class="drop-zone" id="wine-drop-zone" onclick="document.getElementById('wine-img-input').click()">
+      <div id="wine-drop-text">ここをタップして写真を選択<br><small>（ワイン・日本酒のラベル写真）</small></div>
+      <input type="file" id="wine-img-input" accept="image/*" style="display:none" onchange="loadWineImage(this)">
+    </div>
+    <div class="ocr-status" id="wine-ocr-status" style="display:none"></div>
+    <div class="ocr-result" id="wine-ocr-result" style="display:none"></div>
+    <p style="font-size:0.85rem;color:#666;margin-bottom:10px;">読み取り結果を確認して各項目を入力してください</p>
+    <div class="ocr-fields">
+      <input type="text" id="wocr-name" placeholder="品名" onfocus="selAll(this)" />
+      <input type="text" id="wocr-origin" placeholder="国名/産地" onfocus="selAll(this)" />
+      <input type="number" id="wocr-price" placeholder="価格" min="0" onfocus="selAll(this)" />
+    </div>
+    <div class="ocr-fields" id="wocr-select-row" style="display:none">
+      <select id="wocr-select" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:0.9rem"></select>
+    </div>
+    <div class="ocr-fields">
+      <input type="text" id="wocr-feature" placeholder="特徴" onfocus="selAll(this)" style="flex:1" />
+      <button class="btn btn-blue" onclick="generateFeatureAI(event)">🤖 AIで特徴を生成</button>
+    </div>
+    <div style="font-size:0.8rem;color:#888;margin-bottom:12px;">追加先: <strong id="wocr-cat"></strong></div>
+    <div class="modal-btns">
+      <button class="btn btn-gray" onclick="closeWineOcr()">キャンセル</button>
+      <button class="btn btn-green" onclick="addFromWineOcr()">追加</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 const TAX_RATE = {
@@ -255,7 +292,8 @@ const TAX_RATE = {
 };
 const tin = (p, cat) => Math.round(p * (TAX_RATE[cat] || 1.10));
 
-const CATEGORIES = ['サマリー','精肉','食材','調味料','酒/飲材','備品/包材'];
+const WINE_TABS = ['ワイン(ボトル)','ワイン(グラス白)','ワイン(グラス赤)','日本酒'];
+const CATEGORIES = ['サマリー','精肉','食材','調味料','酒/飲材','備品/包材', ...WINE_TABS];
 const DATA_CATS = ['精肉','食材','調味料','酒/飲材','備品/包材'];
 
 const RAW = {
@@ -468,6 +506,7 @@ function catTotal(cat) {
 // ---- カテゴリパネル ----
 function renderPanel() {
   if (activeTab === 'サマリー') { renderSummary(); return; }
+  if (WINE_TABS.includes(activeTab)) { renderWinePanel(activeTab); return; }
   const cat = activeTab;
   const items = data[cat];
   const totalAmt = items.reduce((s,x) => s + x.price * x.qty, 0);
@@ -734,6 +773,346 @@ function addFromOcr() {
   renderPanel();
 }
 
+// ================== ワイン/日本酒リスト ==================
+const WINE_CONFIG = {
+  'ワイン(ボトル)': {
+    storeKey: 'bottle', idLabel: '品名', originLabel: '国名', hasSelect: false
+  },
+  'ワイン(グラス白)': {
+    storeKey: 'glassWhite', idLabel: '品名', originLabel: '国名',
+    hasSelect: true, selectField: 'dryness', selectLabel: '甘辛', selectOptions: ['辛口','甘口']
+  },
+  'ワイン(グラス赤)': {
+    storeKey: 'glassRed', idLabel: '品名', originLabel: '国名',
+    hasSelect: true, selectField: 'body', selectLabel: 'ボディ', selectOptions: ['ライトボディ','ミディアムボディ','フルボディ']
+  },
+  '日本酒': {
+    storeKey: 'sake', idLabel: '品名', originLabel: '産地',
+    hasSelect: true, selectField: 'grade', selectLabel: '種別', selectOptions: ['純米酒','純米吟醸','純米大吟醸','本醸造','吟醸','大吟醸','普通酒']
+  }
+};
+const WINE_STORE_KEY = 'winelist_v1';
+
+let wineData = {};
+function loadWineData() {
+  try { wineData = JSON.parse(localStorage.getItem(WINE_STORE_KEY)) || {}; }
+  catch { wineData = {}; }
+  Object.values(WINE_CONFIG).forEach(cfg => {
+    if (!wineData[cfg.storeKey]) wineData[cfg.storeKey] = [];
+  });
+}
+function saveWineData() { localStorage.setItem(WINE_STORE_KEY, JSON.stringify(wineData)); }
+
+let wineSortOrder = 'default';
+function setWineSortOrder(val) { wineSortOrder = val; renderPanel(); }
+function sortedWineItems(items) {
+  const idx = items.map((item, i) => ({ item, i }));
+  switch (wineSortOrder) {
+    case 'name':       return idx.sort((a,b) => a.item.name.localeCompare(b.item.name, 'ja'));
+    case 'price_asc':  return idx.sort((a,b) => a.item.price - b.item.price);
+    case 'price_desc': return idx.sort((a,b) => b.item.price - a.item.price);
+    default:           return idx;
+  }
+}
+
+function renderWinePanel(cat) {
+  const cfg = WINE_CONFIG[cat];
+  const items = wineData[cfg.storeKey];
+  const sorted = sortedWineItems(items);
+  const selectHeader = cfg.hasSelect ? `<th>${cfg.selectLabel}</th>` : '';
+  const rows = sorted.map(({ item, i }) => {
+    const selectCell = cfg.hasSelect ? `
+      <td>
+        <select class="name-input" onchange="updateWineField('${cfg.storeKey}',${i},'${cfg.selectField}',this.value)">
+          ${cfg.selectOptions.map(o => `<option value="${o}" ${item[cfg.selectField]===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+        <span class="print-val">${item[cfg.selectField] || ''}</span>
+      </td>` : '';
+    return `<tr id="wine-row-${i}">
+      <td><input class="name-input" type="text" value="${item.name||''}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'name',this.value)"><span class="print-name">${item.name||''}</span></td>
+      <td><input class="name-input" type="text" value="${item.origin||''}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'origin',this.value)"><span class="print-name">${item.origin||''}</span></td>
+      <td class="right"><input class="qty-input" type="number" min="0" value="${item.price||0}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'price',this.value)" style="width:80px;text-align:right"><span class="print-val">¥${(item.price||0).toLocaleString()}</span></td>
+      ${selectCell}
+      <td><input class="name-input" type="text" value="${item.feature||''}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'feature',this.value)"><span class="print-val">${item.feature||''}</span></td>
+      <td><button class="btn-del" onclick="delWineItem('${cfg.storeKey}',${i})">削除</button></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('panel').innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <h2>${cat} <span style="font-size:0.85rem;font-weight:400;color:#555;margin-left:12px">品目数: <strong style="color:#1e5631">${items.length}</strong></span></h2>
+        <div class="top-btns">
+          <button class="btn btn-orange" onclick="openWineOcr('${cat}')">写真から追加</button>
+          <button class="btn btn-blue" onclick="downloadWineCSV('${cat}')">CSVダウンロード</button>
+          <button class="btn btn-orange" onclick="printWineTab('${cat}')">印刷</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <input type="text" id="wf-name" placeholder="${cfg.idLabel}" onfocus="selAll(this)" />
+        <input type="text" id="wf-origin" placeholder="${cfg.originLabel}" onfocus="selAll(this)" />
+        <input type="number" id="wf-price" placeholder="価格" min="0" onfocus="selAll(this)" />
+        ${cfg.hasSelect ? `<select id="wf-select">${cfg.selectOptions.map(o=>`<option value="${o}">${o}</option>`).join('')}</select>` : ''}
+        <input type="text" id="wf-feature" placeholder="特徴" onfocus="selAll(this)" />
+        <button class="btn btn-green" onclick="addWineItem('${cat}')">追加</button>
+        <select onchange="setWineSortOrder(this.value)" style="flex:none;padding:7px 8px;border:1px solid #ccc;border-radius:5px;font-size:0.85rem;color:#444">
+          <option value="default" ${wineSortOrder==='default'?'selected':''}>登録順</option>
+          <option value="name" ${wineSortOrder==='name'?'selected':''}>あいうえお順</option>
+          <option value="price_asc" ${wineSortOrder==='price_asc'?'selected':''}>価格↑安い順</option>
+          <option value="price_desc" ${wineSortOrder==='price_desc'?'selected':''}>価格↓高い順</option>
+        </select>
+      </div>
+      <table>
+        <thead><tr>
+          <th>${cfg.idLabel}</th><th>${cfg.originLabel}</th><th class="right">価格</th>${selectHeader}<th>特徴</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function addWineItem(cat) {
+  const cfg = WINE_CONFIG[cat];
+  const name = document.getElementById('wf-name').value.trim();
+  const origin = document.getElementById('wf-origin').value.trim();
+  const price = parseFloat(document.getElementById('wf-price').value) || 0;
+  const feature = document.getElementById('wf-feature').value.trim();
+  if (!name) { alert(`${cfg.idLabel}を入力してください`); return; }
+  const item = { name, origin, price, feature };
+  if (cfg.hasSelect) item[cfg.selectField] = document.getElementById('wf-select').value;
+  wineData[cfg.storeKey].push(item);
+  saveWineData();
+  renderPanel();
+}
+
+function delWineItem(storeKey, i) {
+  if (!confirm(`「${wineData[storeKey][i].name}」を削除しますか？`)) return;
+  wineData[storeKey].splice(i, 1);
+  saveWineData();
+  renderPanel();
+}
+
+function updateWineField(storeKey, i, field, value) {
+  const item = wineData[storeKey][i];
+  item[field] = field === 'price' ? (parseFloat(value) || 0) : value;
+  saveWineData();
+}
+
+function downloadWineCSV(cat) {
+  const cfg = WINE_CONFIG[cat];
+  const items = wineData[cfg.storeKey];
+  let csv = '﻿';
+  const headers = [cfg.idLabel, cfg.originLabel, '価格'];
+  if (cfg.hasSelect) headers.push(cfg.selectLabel);
+  headers.push('特徴');
+  csv += headers.join(',') + '\n';
+  items.forEach(x => {
+    const row = [x.name, x.origin, x.price];
+    if (cfg.hasSelect) row.push(x[cfg.selectField] || '');
+    row.push(x.feature || '');
+    csv += row.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',') + '\n';
+  });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${cat}.csv`;
+  a.click();
+}
+
+// ---- ワイン/日本酒 印刷 ----
+function wineSectionHTML(cat) {
+  const cfg = WINE_CONFIG[cat];
+  const items = wineData[cfg.storeKey];
+  const rows = items.map(x => `
+    <tr>
+      <td style="padding:6px;border-bottom:1px solid #eee;">${x.name||''}</td>
+      <td style="padding:6px;border-bottom:1px solid #eee;">${x.origin||''}</td>
+      <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">¥${(x.price||0).toLocaleString()}</td>
+      ${cfg.hasSelect ? `<td style="padding:6px;border-bottom:1px solid #eee;">${x[cfg.selectField]||''}</td>` : ''}
+      <td style="padding:6px;border-bottom:1px solid #eee;">${x.feature||''}</td>
+    </tr>`).join('');
+  return `
+    <h3 style="color:#1e5631;margin:16px 0 8px;">${cat}</h3>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+      <thead><tr style="background:#f4f7f4;">
+        <th style="text-align:left;padding:6px;border-bottom:1px solid #ccc;">${cfg.idLabel}</th>
+        <th style="text-align:left;padding:6px;border-bottom:1px solid #ccc;">${cfg.originLabel}</th>
+        <th style="text-align:right;padding:6px;border-bottom:1px solid #ccc;">価格</th>
+        ${cfg.hasSelect ? `<th style="text-align:left;padding:6px;border-bottom:1px solid #ccc;">${cfg.selectLabel}</th>` : ''}
+        <th style="text-align:left;padding:6px;border-bottom:1px solid #ccc;">特徴</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function printGlassWine() {
+  const container = document.getElementById('print-combined');
+  container.innerHTML = `
+    <div style="text-align:center;font-size:2rem;font-weight:700;padding:16px 0 8px;">グラスワイン</div>
+    ${wineSectionHTML('ワイン(グラス白)')}
+    ${wineSectionHTML('ワイン(グラス赤)')}
+  `;
+  document.body.classList.add('print-mode-combined');
+  window.print();
+}
+
+function printWineTab(cat) {
+  if (cat === 'ワイン(グラス白)' || cat === 'ワイン(グラス赤)') { printGlassWine(); return; }
+  window.print();
+}
+
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('print-mode-combined');
+});
+
+// ---- ワイン/日本酒 OCR ----
+let wineOcrCat = null;
+let wineOcrLastText = '';
+
+function openWineOcr(cat) {
+  wineOcrCat = cat;
+  const cfg = WINE_CONFIG[cat];
+  document.getElementById('wocr-cat').textContent = cat;
+  document.getElementById('wine-ocr-status').style.display = 'none';
+  document.getElementById('wine-ocr-result').style.display = 'none';
+  document.getElementById('wocr-name').value = '';
+  document.getElementById('wocr-origin').value = '';
+  document.getElementById('wocr-price').value = '';
+  document.getElementById('wocr-feature').value = '';
+  wineOcrLastText = '';
+  const selectRow = document.getElementById('wocr-select-row');
+  if (cfg.hasSelect) {
+    selectRow.style.display = 'flex';
+    document.getElementById('wocr-select').innerHTML =
+      cfg.selectOptions.map(o => `<option value="${o}">${o}</option>`).join('');
+  } else {
+    selectRow.style.display = 'none';
+  }
+  document.getElementById('wine-drop-text').innerHTML = 'ここをタップして写真を選択<br><small>（ワイン・日本酒のラベル写真）</small>';
+  const old = document.getElementById('wine-drop-zone').querySelector('img');
+  if (old) old.remove();
+  document.getElementById('wine-img-input').value = '';
+  document.getElementById('wine-ocr-modal').classList.add('open');
+}
+
+function closeWineOcr() {
+  document.getElementById('wine-ocr-modal').classList.remove('open');
+}
+
+function loadWineImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dz = document.getElementById('wine-drop-zone');
+    const old = dz.querySelector('img');
+    if (old) old.remove();
+    const img = document.createElement('img');
+    img.src = e.target.result;
+    dz.appendChild(img);
+    document.getElementById('wine-drop-text').textContent = '';
+    runWineOcr(e.target.result);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function recognizeLabelText(src, onProgress) {
+  const { data: { text } } = await Tesseract.recognize(src, 'jpn+eng', {
+    logger: m => {
+      if (m.status === 'recognizing text' && onProgress) onProgress(Math.round(m.progress*100));
+    }
+  });
+  return text;
+}
+
+async function runWineOcr(src) {
+  const status = document.getElementById('wine-ocr-status');
+  const result = document.getElementById('wine-ocr-result');
+  status.style.display = 'block';
+  status.textContent = '読み取り中...';
+  result.style.display = 'none';
+  try {
+    const text = await recognizeLabelText(src, pct => status.textContent = `読み取り中... ${pct}%`);
+    wineOcrLastText = text;
+    status.textContent = '読み取り完了。内容を確認して各項目を入力してください。';
+    result.style.display = 'block';
+    result.textContent = text;
+
+    const prices = text.match(/[\d,]+円|¥[\d,]+|[\d]{3,6}/g);
+    if (prices) {
+      const num = prices[prices.length-1].replace(/[円¥,]/g,'');
+      if (!isNaN(num) && num > 0) document.getElementById('wocr-price').value = num;
+    }
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length) document.getElementById('wocr-name').value = lines[0];
+  } catch (e) {
+    status.textContent = '読み取りに失敗しました。手動で入力してください。';
+  }
+}
+
+function addFromWineOcr() {
+  const cat = wineOcrCat;
+  const cfg = WINE_CONFIG[cat];
+  const name = document.getElementById('wocr-name').value.trim();
+  const origin = document.getElementById('wocr-origin').value.trim();
+  const price = parseFloat(document.getElementById('wocr-price').value) || 0;
+  const feature = document.getElementById('wocr-feature').value.trim();
+  if (!name) { alert('品名を入力してください'); return; }
+  const item = { name, origin, price, feature };
+  if (cfg.hasSelect) item[cfg.selectField] = document.getElementById('wocr-select').value;
+  wineData[cfg.storeKey].push(item);
+  saveWineData();
+  closeWineOcr();
+  renderPanel();
+}
+
+// ---- AI特徴生成 ----
+const WINE_AI_KEY_STORAGE = 'wine_ai_api_key';
+function getAiApiKey() { return localStorage.getItem(WINE_AI_KEY_STORAGE) || ''; }
+function setAiApiKey() {
+  const key = prompt('AI（Claude）APIキーを入力してください。空欄で保存すると削除されます。', getAiApiKey());
+  if (key !== null) localStorage.setItem(WINE_AI_KEY_STORAGE, key.trim());
+}
+
+async function generateFeatureAI(evt) {
+  const apiKey = getAiApiKey();
+  if (!apiKey) { alert('先にヘッダーの「AI設定」からAPIキーを登録してください'); return; }
+  if (!wineOcrLastText) { alert('先に写真を読み込んでください'); return; }
+  const btn = evt.target;
+  const original = btn.textContent;
+  btn.textContent = '生成中...';
+  btn.disabled = true;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-haiku-20241022',
+        max_tokens: 200,
+        messages: [{
+          role: 'user',
+          content: `以下はお酒のラベルをOCRで読み取ったテキストです。このお酒の特徴を、接客用メニュー表に載せる1〜2文の日本語の紹介文として書いてください。読み取れない情報は無理に補完せず、わかる範囲で書いてください。\n\n${wineOcrLastText}`
+        }]
+      })
+    });
+    if (!res.ok) throw new Error(`API error ${res.status}`);
+    const json = await res.json();
+    const text = json.content && json.content[0] && json.content[0].text ? json.content[0].text.trim() : '';
+    if (text) document.getElementById('wocr-feature').value = text;
+    else throw new Error('empty response');
+  } catch (e) {
+    alert('AI生成に失敗しました。手動で入力してください。');
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+}
+
 // ---- バックアップ ----
 function showBackupStatus(msg) {
   const el = document.getElementById('backup-status');
@@ -853,6 +1232,7 @@ document.getElementById('panel').addEventListener('keydown', e => {
 const now = new Date();
 const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 initMonth(thisMonth);
+loadWineData();
 renderTabs();
 renderPanel();
 </script>
