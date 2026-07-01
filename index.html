@@ -371,6 +371,9 @@
     <div class="ocr-fields" id="wocr-variety-row" style="display:none">
       <input type="text" id="wocr-variety" placeholder="品種" style="flex:1" />
     </div>
+    <div class="ocr-fields">
+      <button class="btn btn-blue" onclick="convertToKatakana(event)" style="flex:1">🈂️ 品名・品種をカタカナ表記に変換（AI）</button>
+    </div>
     <div class="ocr-fields" id="wocr-select-row" style="display:none">
       <select id="wocr-select" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:0.9rem"></select>
     </div>
@@ -1482,6 +1485,51 @@ async function generateFeatureAI(evt) {
     else throw new Error('empty response');
   } catch (e) {
     alert('AI生成に失敗しました。手動で入力してください。');
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+}
+
+async function convertToKatakana(evt) {
+  const apiKey = getAiApiKey();
+  if (!apiKey) { alert('先にヘッダーの「AI設定」からAPIキーを登録してください'); return; }
+  const cfg = WINE_CONFIG[wineOcrCat];
+  const name = document.getElementById('wocr-name').value.trim();
+  const variety = cfg.hasVariety ? document.getElementById('wocr-variety').value.trim() : '';
+  if (!name && !variety) { alert('先に品名または品種を入力してください'); return; }
+  const btn = evt.target;
+  const original = btn.textContent;
+  btn.textContent = '変換中...';
+  btn.disabled = true;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 150,
+        messages: [{
+          role: 'user',
+          content: `以下は海外のお酒のラベルから読み取った英語（またはアルファベット）表記です。日本の酒屋・レストランのメニュー表で一般的に使われるカタカナ表記に変換してください。\n品名: ${name || '(なし)'}\n品種: ${variety || '(なし)'}\n\n出力は次の形式のみで、説明文は付けずに返してください。該当がなければ空欄にしてください。\n品名:カタカナ表記\n品種:カタカナ表記`
+        }]
+      })
+    });
+    if (!res.ok) throw new Error(`API error ${res.status}`);
+    const json = await res.json();
+    const text = json.content && json.content[0] && json.content[0].text ? json.content[0].text.trim() : '';
+    const nameMatch = text.match(/品名[:：]\s*(.+)/);
+    const varietyMatch = text.match(/品種[:：]\s*(.+)/);
+    if (nameMatch && nameMatch[1].trim()) document.getElementById('wocr-name').value = nameMatch[1].trim();
+    if (cfg.hasVariety && varietyMatch && varietyMatch[1].trim()) document.getElementById('wocr-variety').value = varietyMatch[1].trim();
+    if (!nameMatch && !varietyMatch) throw new Error('empty response');
+  } catch (e) {
+    alert('カタカナ変換に失敗しました。手動で入力してください。');
   } finally {
     btn.textContent = original;
     btn.disabled = false;
