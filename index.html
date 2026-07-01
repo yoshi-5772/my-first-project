@@ -292,6 +292,23 @@ const TAX_RATE = {
 };
 const tin = (p, cat) => Math.round(p * (TAX_RATE[cat] || 1.10));
 
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// name/price_asc/price_desc は品目一覧全般で共通の並び替え条件
+function sortByCommonOrder(items, order) {
+  const idx = items.map((item, i) => ({ item, i }));
+  switch (order) {
+    case 'name':       return idx.sort((a,b) => a.item.name.localeCompare(b.item.name, 'ja'));
+    case 'price_asc':  return idx.sort((a,b) => a.item.price - b.item.price);
+    case 'price_desc': return idx.sort((a,b) => b.item.price - a.item.price);
+    default:           return idx;
+  }
+}
+
 const WINE_TABS = ['ワイン(ボトル)','ワイン(グラス白)','ワイン(グラス赤)','日本酒'];
 const CATEGORIES = ['サマリー','精肉','食材','調味料','酒/飲材','備品/包材', ...WINE_TABS];
 const DATA_CATS = ['精肉','食材','調味料','酒/飲材','備品/包材'];
@@ -517,8 +534,8 @@ function renderPanel() {
   const rows = sorted.map(({ item, i }) => {
     const sub = item.price * item.qty;
     return `<tr id="row-${i}">
-      <td><input class="name-input" type="text" value="${item.name}" onfocus="selAll(this)" oninput="updateName('${cat}',${i},this.value)"><span class="print-name">${item.name}</span></td>
-      <td class="muted">${item.unit}</td>
+      <td><input class="name-input" type="text" value="${escapeHtml(item.name)}" onfocus="selAll(this)" oninput="updateName('${cat}',${i},this.value)"><span class="print-name">${escapeHtml(item.name)}</span></td>
+      <td class="muted">${escapeHtml(item.unit)}</td>
       <td class="right">
         <input class="qty-input" type="text" inputmode="decimal" autocomplete="off"
           value="${item.priceEx}" onfocus="selAll(this)" oninput="updatePrice('${cat}',${i},this.value)"
@@ -805,15 +822,7 @@ function saveWineData() { localStorage.setItem(WINE_STORE_KEY, JSON.stringify(wi
 
 let wineSortOrder = 'default';
 function setWineSortOrder(val) { wineSortOrder = val; renderPanel(); }
-function sortedWineItems(items) {
-  const idx = items.map((item, i) => ({ item, i }));
-  switch (wineSortOrder) {
-    case 'name':       return idx.sort((a,b) => a.item.name.localeCompare(b.item.name, 'ja'));
-    case 'price_asc':  return idx.sort((a,b) => a.item.price - b.item.price);
-    case 'price_desc': return idx.sort((a,b) => b.item.price - a.item.price);
-    default:           return idx;
-  }
-}
+function sortedWineItems(items) { return sortByCommonOrder(items, wineSortOrder); }
 
 function renderWinePanel(cat) {
   const cfg = WINE_CONFIG[cat];
@@ -824,16 +833,16 @@ function renderWinePanel(cat) {
     const selectCell = cfg.hasSelect ? `
       <td>
         <select class="name-input" onchange="updateWineField('${cfg.storeKey}',${i},'${cfg.selectField}',this.value)">
-          ${cfg.selectOptions.map(o => `<option value="${o}" ${item[cfg.selectField]===o?'selected':''}>${o}</option>`).join('')}
+          ${cfg.selectOptions.map(o => `<option value="${escapeHtml(o)}" ${item[cfg.selectField]===o?'selected':''}>${escapeHtml(o)}</option>`).join('')}
         </select>
-        <span class="print-val">${item[cfg.selectField] || ''}</span>
+        <span class="print-val">${escapeHtml(item[cfg.selectField] || '')}</span>
       </td>` : '';
     return `<tr id="wine-row-${i}">
-      <td><input class="name-input" type="text" value="${item.name||''}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'name',this.value)"><span class="print-name">${item.name||''}</span></td>
-      <td><input class="name-input" type="text" value="${item.origin||''}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'origin',this.value)"><span class="print-name">${item.origin||''}</span></td>
+      <td><input class="name-input" type="text" value="${escapeHtml(item.name||'')}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'name',this.value)"><span class="print-name">${escapeHtml(item.name||'')}</span></td>
+      <td><input class="name-input" type="text" value="${escapeHtml(item.origin||'')}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'origin',this.value)"><span class="print-name">${escapeHtml(item.origin||'')}</span></td>
       <td class="right"><input class="qty-input" type="number" min="0" value="${item.price||0}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'price',this.value)" style="width:80px;text-align:right"><span class="print-val">¥${(item.price||0).toLocaleString()}</span></td>
       ${selectCell}
-      <td><input class="name-input" type="text" value="${item.feature||''}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'feature',this.value)"><span class="print-val">${item.feature||''}</span></td>
+      <td><input class="name-input" type="text" value="${escapeHtml(item.feature||'')}" onfocus="selAll(this)" oninput="updateWineField('${cfg.storeKey}',${i},'feature',this.value)"><span class="print-val">${escapeHtml(item.feature||'')}</span></td>
       <td><button class="btn-del" onclick="delWineItem('${cfg.storeKey}',${i})">削除</button></td>
     </tr>`;
   }).join('');
@@ -925,11 +934,11 @@ function wineSectionHTML(cat) {
   const items = wineData[cfg.storeKey];
   const rows = items.map(x => `
     <tr>
-      <td style="padding:6px;border-bottom:1px solid #eee;">${x.name||''}</td>
-      <td style="padding:6px;border-bottom:1px solid #eee;">${x.origin||''}</td>
+      <td style="padding:6px;border-bottom:1px solid #eee;">${escapeHtml(x.name||'')}</td>
+      <td style="padding:6px;border-bottom:1px solid #eee;">${escapeHtml(x.origin||'')}</td>
       <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">¥${(x.price||0).toLocaleString()}</td>
-      ${cfg.hasSelect ? `<td style="padding:6px;border-bottom:1px solid #eee;">${x[cfg.selectField]||''}</td>` : ''}
-      <td style="padding:6px;border-bottom:1px solid #eee;">${x.feature||''}</td>
+      ${cfg.hasSelect ? `<td style="padding:6px;border-bottom:1px solid #eee;">${escapeHtml(x[cfg.selectField]||'')}</td>` : ''}
+      <td style="padding:6px;border-bottom:1px solid #eee;">${escapeHtml(x.feature||'')}</td>
     </tr>`).join('');
   return `
     <h3 style="color:#1e5631;margin:16px 0 8px;">${cat}</h3>
@@ -1092,7 +1101,7 @@ async function generateFeatureAI(evt) {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-haiku-20241022',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 200,
         messages: [{
           role: 'user',
@@ -1159,15 +1168,11 @@ function importBackup(input) {
 let sortOrder = 'default';
 function setSortOrder(val) { sortOrder = val; renderPanel(); }
 function sortedItems(items) {
-  const idx = items.map((item, i) => ({ item, i }));
   switch (sortOrder) {
-    case 'name':       return idx.sort((a,b) => a.item.name.localeCompare(b.item.name, 'ja'));
-    case 'price_asc':  return idx.sort((a,b) => a.item.price - b.item.price);
-    case 'price_desc': return idx.sort((a,b) => b.item.price - a.item.price);
-    case 'qty_asc':    return idx.sort((a,b) => a.item.qty - b.item.qty);
-    case 'qty_desc':   return idx.sort((a,b) => b.item.qty - a.item.qty);
-    case 'sub_desc':   return idx.sort((a,b) => (b.item.price*b.item.qty)-(a.item.price*a.item.qty));
-    default:           return idx;
+    case 'qty_asc':  { const idx = items.map((item, i) => ({ item, i })); return idx.sort((a,b) => a.item.qty - b.item.qty); }
+    case 'qty_desc': { const idx = items.map((item, i) => ({ item, i })); return idx.sort((a,b) => b.item.qty - a.item.qty); }
+    case 'sub_desc': { const idx = items.map((item, i) => ({ item, i })); return idx.sort((a,b) => (b.item.price*b.item.qty)-(a.item.price*a.item.qty)); }
+    default: return sortByCommonOrder(items, sortOrder);
   }
 }
 
