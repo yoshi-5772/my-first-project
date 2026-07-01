@@ -199,8 +199,16 @@
       padding: 40px 48px 34px;
     }
     #print-combined .menu-print.menu-print-wide {
-      max-width: 960px;
+      max-width: 1080px;
+      padding: 44px 60px 38px;
     }
+    #print-combined .menu-print-wide h1 { font-size: 2.5rem; }
+    #print-combined .menu-print-wide .menu-subtitle { font-size: 0.82rem; }
+    #print-combined .menu-print-wide h2 { font-size: 1.3rem; }
+    #print-combined .menu-print-wide .menu-item-name { font-size: 1.4rem; }
+    #print-combined .menu-print-wide .menu-item-price { font-size: 1.3rem; }
+    #print-combined .menu-print-wide .menu-item-sub { font-size: 0.98rem; }
+    #print-combined .menu-print-wide .menu-item-feature { font-size: 1.08rem; }
     #print-combined .menu-print::before {
       content: '';
       position: absolute;
@@ -1343,7 +1351,8 @@ function wineSectionHTML(cat, sectionLabel) {
 }
 
 // 印刷内容が1ページに収まらない場合、はみ出た分だけ縮小してちょうど1枚に収める
-function fitPrintToOnePage() {
+// wide指定時はボトルワイン用の横長(A4横向き)レイアウトとして計測する
+function fitPrintToOnePage(wide) {
   const container = document.getElementById('print-combined');
   const menu = container.querySelector('.menu-print');
   if (!menu) return;
@@ -1357,11 +1366,12 @@ function fitPrintToOnePage() {
   container.style.position = 'fixed';
   container.style.visibility = 'hidden';
   container.style.left = '-9999px';
-  container.style.width = '720px';
+  // 実際の印刷幅（menu-print-wideのmax-width）に合わせて計測し、高さのずれを防ぐ
+  container.style.width = wide ? '1080px' : '760px';
 
   const mmToPx = 96 / 25.4;
-  // A4縦 - 上下1cmずつのページ余白。環境によるレンダリング誤差を見込んで少し余裕を持たせる
-  const pageHeightPx = (297 - 20) * mmToPx * 0.92;
+  // A4の短辺(210mm)/長辺(297mm) - 上下1cmずつのページ余白。環境によるレンダリング誤差を見込んで少し余裕を持たせる
+  const pageHeightPx = ((wide ? 210 : 297) - 20) * mmToPx * 0.92;
   const contentHeight = menu.scrollHeight;
   if (contentHeight > pageHeightPx) {
     const scale = Math.max(0.4, pageHeightPx / contentHeight);
@@ -1375,6 +1385,17 @@ function fitPrintToOnePage() {
   container.style.width = prev.width;
 }
 
+// wide指定時のみ印刷の向きをA4横向きに切り替え、通常時は縦向きに戻す
+function setWidePrintOrientation(wide) {
+  let style = document.getElementById('print-orientation-style');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'print-orientation-style';
+    document.head.appendChild(style);
+  }
+  style.textContent = wide ? '@page { size: landscape; margin: 1cm; }' : '';
+}
+
 function showWineMenuPrint(title, bodyHtml, subtitle, wide) {
   const container = document.getElementById('print-combined');
   const divider = '<div class="menu-divider"><span></span><i>◆</i><span></span></div>';
@@ -1386,7 +1407,8 @@ function showWineMenuPrint(title, bodyHtml, subtitle, wide) {
       ${divider}
     </div>`;
   document.body.classList.add('print-mode-combined');
-  fitPrintToOnePage();
+  setWidePrintOrientation(wide);
+  fitPrintToOnePage(wide);
   window.print();
 }
 
@@ -1408,6 +1430,7 @@ window.addEventListener('afterprint', () => {
   document.body.classList.remove('print-mode-combined');
   const menu = document.querySelector('#print-combined .menu-print');
   if (menu) menu.style.zoom = '1';
+  setWidePrintOrientation(false);
 });
 
 // ---- ワイン/日本酒 OCR ----
