@@ -1011,17 +1011,49 @@ const KNOWN_FEATURE_TEXT = {
   }
 };
 
+// 商品名だけでは品種を推測できない銘柄用に、既知の対応を直接引けるようにする
+const KNOWN_VARIETY = {
+  bottle: {
+    'ブレッド アンド バター(シャルドネ)': 'シャルドネ',
+    'ティエラ 甲州 シュール・リー': '甲州',
+    'ポルコ エスピーニョ ブランコ': 'マルヴァジアフィナ・セルシアル',
+    'カトラルヴォス': 'シラー',
+    'カザルダ コエリェイラ': 'トゥリガ・ナショナル',
+    'ブレッド アンド バター(カベルネソーヴィニョン)': 'カベルネ・ソーヴィニヨン',
+    'ベンド': 'カベルネ・ソーヴィニヨン',
+    'プラティ': 'カベルネ・ソーヴィニヨン',
+    'ヴェンジェンス': 'カベルネ・メルロー'
+  },
+  glassWhite: {
+    'ベンド シャルドネ': 'シャルドネ',
+    'マンズワイン 甲州 シュール・リー ティエラ': '甲州'
+  },
+  glassRed: {
+    'ペイロタン ピノ・ノワール': 'ピノ・ノワール',
+    'ペイロタン シラー': 'シラー',
+    'テラソス・ド・テージョ': 'アラゴネス主体',
+    'カザル・ダ・コエリェイラ': 'トゥリガ・ナショナル、アリカンテ・ブーシェ、シラー',
+    'ベンド カベルネ・ソーヴィニヨン': 'カベルネ・ソーヴィニヨン',
+    'パヌール カベルネ・ソーヴィニヨン': 'カベルネ・ソーヴィニヨン'
+  }
+};
+
 function migrateWineItem(cfg, item) {
   if (cfg.hasVariety && !item.variety) {
+    const known = KNOWN_VARIETY[cfg.storeKey];
     const list = cfg.varietyListId === 'sake-rice-list' ? SAKE_RICE_LIST : WINE_VARIETY_LIST;
-    const m = (item.feature || '').match(/品種[:：]\s*([^。\n]+)/);
-    if (m) {
-      const extracted = m[1].trim();
-      item.variety = list.find(v => extracted.includes(v)) || extracted.split(/[（(]/)[0].trim();
-      item.feature = item.feature.replace(/品種[:：]\s*[^。\n]+。?/, '').trim();
+    if (known && known[item.name]) {
+      item.variety = known[item.name];
     } else {
-      const found = list.find(v => item.name && item.name.includes(v));
-      if (found) item.variety = found;
+      const m = (item.feature || '').match(/品種[:：]\s*([^。\n]+)/);
+      if (m) {
+        const extracted = m[1].trim();
+        item.variety = list.find(v => extracted.includes(v)) || extracted.split(/[（(]/)[0].trim();
+        item.feature = item.feature.replace(/品種[:：]\s*[^。\n]+。?/, '').trim();
+      } else {
+        const found = list.find(v => item.name && item.name.includes(v));
+        if (found) item.variety = found;
+      }
     }
   }
   if (!item.feature) {
