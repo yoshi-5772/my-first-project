@@ -302,6 +302,7 @@
   <option value="南アフリカ"></option>
   <option value="ポルトガル"></option>
 </datalist>
+<datalist id="wine-name-list"></datalist>
 <div id="print-combined"></div>
 
 <div class="container">
@@ -352,7 +353,7 @@
     <div class="ocr-result" id="wine-ocr-result" style="display:none"></div>
     <p style="font-size:0.85rem;color:#666;margin-bottom:10px;">読み取り結果を確認して各項目を入力してください</p>
     <div class="ocr-fields">
-      <input type="text" id="wocr-name" placeholder="品名" onfocus="selAll(this)" />
+      <input type="text" id="wocr-name" placeholder="品名" list="wine-name-list" onfocus="selAll(this)" />
       <input type="text" id="wocr-origin" placeholder="国名/産地" onfocus="selAll(this)" />
       <input type="number" id="wocr-price" placeholder="価格" min="0" onfocus="selAll(this)" />
     </div>
@@ -1018,7 +1019,7 @@ function renderWinePanel(cat) {
         </div>
       </div>
       <div class="form-row">
-        <input type="text" id="wf-name" placeholder="${cfg.idLabel}" onfocus="selAll(this)" />
+        <input type="text" id="wf-name" placeholder="${cfg.idLabel}" list="wine-name-list" onfocus="selAll(this)" />
         <input type="text" id="wf-origin" placeholder="${cfg.originLabel}" ${cfg.originLabel === '国名' ? 'list="wine-country-list"' : ''} onfocus="selAll(this)" />
         <input type="number" id="wf-price" placeholder="価格" min="0" onfocus="selAll(this)" />
         ${cfg.hasSelect ? `<select id="wf-select">${cfg.selectOptions.map(o=>`<option value="${o}">${o}</option>`).join('')}</select>` : ''}
@@ -1039,6 +1040,13 @@ function renderWinePanel(cat) {
       </table>
     </div>`;
   document.querySelectorAll('#panel textarea.wine-wrap').forEach(autoGrowWine);
+  refreshWineNameList(cfg.storeKey);
+}
+
+function refreshWineNameList(storeKey) {
+  const names = [...new Set(wineData[storeKey].map(x => x.name).filter(Boolean))];
+  document.getElementById('wine-name-list').innerHTML =
+    names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
 }
 
 function addWineItem(cat) {
@@ -1157,6 +1165,7 @@ function openWineOcr(cat) {
   document.getElementById('wine-ocr-status').style.display = 'none';
   document.getElementById('wine-ocr-result').style.display = 'none';
   document.getElementById('wocr-name').value = '';
+  refreshWineNameList(cfg.storeKey);
   document.getElementById('wocr-origin').value = '';
   document.getElementById('wocr-origin').placeholder = cfg.originLabel;
   if (cfg.originLabel === '国名') document.getElementById('wocr-origin').setAttribute('list', 'wine-country-list');
