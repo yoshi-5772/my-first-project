@@ -1680,7 +1680,7 @@ async function convertToKatakana(evt) {
 
 // ================== 現金出納帳・売上表 ==================
 const WEEKDAY_LABELS = ['日','月','火','水','木','金','土'];
-const CASH_KIND_LABELS = { sales: '現金売上', other_income: 'その他収入', expense: '仕入・経費' };
+const CASH_KIND_LABELS = { income: '収入', expense: '仕入・経費' };
 // カード/電子マネー/その他の列構成。増減・改名はここだけ変更すればよい
 const SALES_PAYMENT_COLUMNS = [
   { key: 'card',   label: 'カード' },
@@ -1709,7 +1709,13 @@ function salesKey(ym) { return `sales_${ym}`; }
 function loadCashRecord(ym) {
   try {
     const saved = JSON.parse(localStorage.getItem(cashKey(ym)));
-    if (saved) return saved;
+    if (saved) {
+      // 旧区分（sales/other_income）は収入(income)に統合する後方互換処理
+      saved.entries = (saved.entries || []).map(e =>
+        (e.kind === 'sales' || e.kind === 'other_income') ? { ...e, kind: 'income' } : e
+      );
+      return saved;
+    }
   } catch {}
   return { openingBalance: null, entries: [] };
 }
@@ -1780,22 +1786,28 @@ function initSalesMonth(ym) {
 function saveSales() { localStorage.setItem(salesKey(currentMonth), JSON.stringify(salesData)); }
 
 function ensureSalesDay(day) {
-  if (!salesData.days[day]) salesData.days[day] = { cashOverride: null, card: 0, emoney: 0, other: 0, memo: '' };
+  if (!salesData.days[day]) salesData.days[day] = { cashOverride: null, card: 0, emoney: 0, other: 0, creditPurchase: 0, memo: '' };
   const rec = salesData.days[day];
   SALES_PAYMENT_COLUMNS.forEach(c => { if (rec[c.key] == null) rec[c.key] = 0; });
+  if (rec.creditPurchase == null) rec.creditPurchase = 0;
   return rec;
 }
 
-// 当日の売上表1行分をまとめて計算する（現金は現金出納帳のsalesエントリ自動集計 or 手動上書き）
+// 当日の売上表1行分をまとめて計算する（現金は現金出納帳のincomeエントリ自動集計 or 手動上書き）
 function computeSalesDay(day) {
   const rec = ensureSalesDay(day);
-  const autoCash = cashData.entries.filter(e => e.kind === 'sales' && e.day === day).reduce((s,e) => s + e.amount, 0);
+  const autoCash = cashData.entries.filter(e => e.kind === 'income' && e.day === day).reduce((s,e) => s + e.amount, 0);
   const isOverride = rec.cashOverride != null;
   const cash = isOverride ? rec.cashOverride : autoCash;
   const expenses = cashData.entries.filter(e => e.kind === 'expense' && e.day === day);
   const expenseTotal = expenses.reduce((s,e) => s + e.amount, 0);
   const paymentTotal = cash + SALES_PAYMENT_COLUMNS.reduce((s,c) => s + (rec[c.key]||0), 0);
-  return { day, rec, autoCash, isOverride, cash, expenses, expenseTotal, paymentTotal };
+  // 現金仕入れ（現金出納帳のexpenseエントリ）と売掛け仕入れ（手動入力）を合算して原価率を出す
+  const cashPurchase = expenseTotal;
+  const creditPurchase = rec.creditPurchase || 0;
+  const purchaseTotal = cashPurchase + creditPurchase;
+  const costRatio = paymentTotal > 0 ? (purchaseTotal / paymentTotal * 100) : null;
+  return { day, rec, autoCash, isOverride, cash, expenses, expenseTotal, paymentTotal, cashPurchase, creditPurchase, purchaseTotal, costRatio };
 }
 
 // ダッシュボード比較用：任意の月（表示中でなくてもよい）の売上合計を副作用なく算出する
@@ -1806,7 +1818,7 @@ function computeMonthSalesTotal(ym) {
   let total = 0;
   for (let day = 1; day <= max; day++) {
     const dayRec = salesRec.days[day] || {};
-    const autoCash = cashRec.entries.filter(e => e.kind === 'sales' && e.day === day).reduce((s,e) => s + e.amount, 0);
+    const autoCash = cashRec.entries.filter(e => e.kind === 'income' && e.day === day).reduce((s,e) => s + e.amount, 0);
     const cash = dayRec.cashOverride != null ? dayRec.cashOverride : autoCash;
     const others = SALES_PAYMENT_COLUMNS.reduce((s,c) => s + (dayRec[c.key]||0), 0);
     total += cash + others;
@@ -1891,10 +1903,9 @@ function renderCashLedger() {
       ${openingEditor}
       <div class="form-row">
         <select id="cf-day" style="flex:none;width:110px">${dayOptions}</select>
-        <select id="cf-kind" onchange="onCashKindChange()" style="flex:none;width:120px">
-          <option value="sales">現金売上</option>
-          <option value="other_income">その他収入</option>
-          <option value="expense" selected>仕入・経費</option>
+        <select id="cf-kind" onchange="onCashKindChange()" style="flex:none;width:100px">
+          <option value="income">収入</option>
+          <option value="expense" selected>支出</option>
         </select>
         <input type="text" id="cf-payee" class="name-input" placeholder="仕入先・支払先名（必須）" style="flex:2" onfocus="selAll(this)">
         <select id="cf-tax" style="flex:none;width:80px">
@@ -1974,7 +1985,7 @@ function renderSalesSheet() {
       </div>
       <table>
         <thead><tr>
-          <th>日付</th><th>曜日</th><th class="right">現金</th>${paymentHeaders}<th class="right">売上合計</th><th>仕入・経費</th><th class="right">経費合計</th>
+          <th>日付</th><th>曜日</th><th class="right">現金</th>${paymentHeaders}<th class="right">売上合計</th><th>現金仕入れ</th><th class="right">売掛け仕入れ</th><th class="right">仕入合計</th><th class="right">原価率</th>
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr style="background:#f4f7f4;font-weight:600">
@@ -1982,12 +1993,18 @@ function renderSalesSheet() {
           <td class="right" id="sales-foot-cash"></td>
           ${SALES_PAYMENT_COLUMNS.map(c => `<td class="right" id="sales-foot-${c.key}"></td>`).join('')}
           <td class="right" id="sales-foot-total"></td>
-          <td></td>
-          <td class="right" id="sales-foot-expense"></td>
+          <td class="right" id="sales-foot-cashpurchase"></td>
+          <td class="right" id="sales-foot-creditpurchase"></td>
+          <td class="right" id="sales-foot-purchase"></td>
+          <td class="right" id="sales-foot-costratio"></td>
         </tr></tfoot>
       </table>
     </div>`;
   refreshSalesFooter();
+}
+
+function costRatioText(costRatio) {
+  return costRatio == null ? '<span class="muted">—</span>' : `${costRatio.toFixed(1)}%`;
 }
 
 function salesRowHtml(day) {
@@ -2018,7 +2035,14 @@ function salesRowHtml(day) {
     ${paymentCells}
     <td class="right" id="sales-total-${day}">¥${c.paymentTotal.toLocaleString()}</td>
     <td id="sales-expense-list-${day}">${expenseList}</td>
-    <td class="right" id="sales-expense-${day}">¥${c.expenseTotal.toLocaleString()}</td>
+    <td class="right">
+      <input class="qty-input" type="text" inputmode="decimal" value="${c.creditPurchase}"
+        onfocus="selAll(this)" oninput="updateSalesField(${day},'creditPurchase',this.value)"
+        onblur="blurNumSales(this,${day},'creditPurchase')">
+      <span class="print-val">¥${c.creditPurchase.toLocaleString()}</span>
+    </td>
+    <td class="right" id="sales-purchase-${day}">¥${c.purchaseTotal.toLocaleString()}</td>
+    <td class="right" id="sales-costratio-${day}">${costRatioText(c.costRatio)}</td>
   </tr>`;
 }
 
@@ -2027,8 +2051,10 @@ function refreshSalesRow(day) {
   const c = computeSalesDay(day);
   const totalEl = document.getElementById(`sales-total-${day}`);
   if (totalEl) totalEl.textContent = `¥${c.paymentTotal.toLocaleString()}`;
-  const expEl = document.getElementById(`sales-expense-${day}`);
-  if (expEl) expEl.textContent = `¥${c.expenseTotal.toLocaleString()}`;
+  const purchaseEl = document.getElementById(`sales-purchase-${day}`);
+  if (purchaseEl) purchaseEl.textContent = `¥${c.purchaseTotal.toLocaleString()}`;
+  const costRatioEl = document.getElementById(`sales-costratio-${day}`);
+  if (costRatioEl) costRatioEl.innerHTML = costRatioText(c.costRatio);
   const badgeEl = document.getElementById(`sales-cash-badge-${day}`);
   if (badgeEl) {
     badgeEl.innerHTML = c.isOverride
@@ -2039,20 +2065,26 @@ function refreshSalesRow(day) {
 
 function refreshSalesFooter() {
   const max = daysInMonth(currentMonth);
-  let cashSum = 0, expenseSum = 0, totalSum = 0;
+  let cashSum = 0, totalSum = 0, cashPurchaseSum = 0, creditPurchaseSum = 0, purchaseSum = 0;
   const colSums = {}; SALES_PAYMENT_COLUMNS.forEach(c => colSums[c.key] = 0);
   for (let day = 1; day <= max; day++) {
     const c = computeSalesDay(day);
     cashSum += c.cash;
-    expenseSum += c.expenseTotal;
     totalSum += c.paymentTotal;
+    cashPurchaseSum += c.cashPurchase;
+    creditPurchaseSum += c.creditPurchase;
+    purchaseSum += c.purchaseTotal;
     SALES_PAYMENT_COLUMNS.forEach(col => colSums[col.key] += (c.rec[col.key]||0));
   }
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = `¥${val.toLocaleString()}`; };
   set('sales-foot-cash', cashSum);
   SALES_PAYMENT_COLUMNS.forEach(c => set(`sales-foot-${c.key}`, colSums[c.key]));
   set('sales-foot-total', totalSum);
-  set('sales-foot-expense', expenseSum);
+  set('sales-foot-cashpurchase', cashPurchaseSum);
+  set('sales-foot-creditpurchase', creditPurchaseSum);
+  set('sales-foot-purchase', purchaseSum);
+  const ratioEl = document.getElementById('sales-foot-costratio');
+  if (ratioEl) ratioEl.innerHTML = costRatioText(totalSum > 0 ? (purchaseSum / totalSum * 100) : null);
 }
 
 function updateSalesField(day, key, value) {
@@ -2109,18 +2141,21 @@ function downloadCashCSV() {
 
 function downloadSalesCSV() {
   const max = daysInMonth(currentMonth);
-  const header = ['日付','曜日','現金', ...SALES_PAYMENT_COLUMNS.map(c => c.label), '売上合計','仕入経費合計'];
+  const header = ['日付','曜日','現金', ...SALES_PAYMENT_COLUMNS.map(c => c.label), '売上合計','現金仕入れ','売掛け仕入れ','仕入合計','原価率(%)'];
   let csv = '﻿' + header.join(',') + '\n';
-  let cashSum = 0, totalSum = 0, expenseSum = 0;
+  let cashSum = 0, totalSum = 0, cashPurchaseSum = 0, creditPurchaseSum = 0, purchaseSum = 0;
   const colSums = {}; SALES_PAYMENT_COLUMNS.forEach(c => colSums[c.key] = 0);
   for (let day = 1; day <= max; day++) {
     const c = computeSalesDay(day);
-    cashSum += c.cash; totalSum += c.paymentTotal; expenseSum += c.expenseTotal;
+    cashSum += c.cash; totalSum += c.paymentTotal;
+    cashPurchaseSum += c.cashPurchase; creditPurchaseSum += c.creditPurchase; purchaseSum += c.purchaseTotal;
     SALES_PAYMENT_COLUMNS.forEach(col => colSums[col.key] += (c.rec[col.key]||0));
-    const row = [day, weekdayOfDay(currentMonth, day), c.cash, ...SALES_PAYMENT_COLUMNS.map(col => c.rec[col.key]||0), c.paymentTotal, c.expenseTotal];
+    const row = [day, weekdayOfDay(currentMonth, day), c.cash, ...SALES_PAYMENT_COLUMNS.map(col => c.rec[col.key]||0),
+      c.paymentTotal, c.cashPurchase, c.creditPurchase, c.purchaseTotal, c.costRatio != null ? c.costRatio.toFixed(1) : ''];
     csv += row.join(',') + '\n';
   }
-  csv += ['月計','', cashSum, ...SALES_PAYMENT_COLUMNS.map(c => colSums[c.key]), totalSum, expenseSum].join(',') + '\n';
+  const monthCostRatio = totalSum > 0 ? (purchaseSum / totalSum * 100).toFixed(1) : '';
+  csv += ['月計','', cashSum, ...SALES_PAYMENT_COLUMNS.map(c => colSums[c.key]), totalSum, cashPurchaseSum, creditPurchaseSum, purchaseSum, monthCostRatio].join(',') + '\n';
   const blob = new Blob([csv], {type:'text/csv'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
