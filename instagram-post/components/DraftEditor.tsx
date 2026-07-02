@@ -91,6 +91,15 @@ export default function DraftEditor({
 
       {hasDraft && !generating && (
         <div className="space-y-4">
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={!canGenerate}
+            className="text-sm font-medium text-accent underline underline-offset-2 disabled:opacity-40"
+          >
+            この写真で作り直す
+          </button>
+
           <div className="space-y-1">
             <label htmlFor="caption-ja" className="text-sm font-medium text-neutral-700">
               日本語キャプション

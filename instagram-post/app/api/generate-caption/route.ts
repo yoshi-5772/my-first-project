@@ -96,6 +96,8 @@ function parseCaptionResult(text: string): CaptionResult | null {
     if (
       typeof data.caption_ja === "string" &&
       typeof data.caption_en === "string" &&
+      data.caption_ja.trim().length > 0 &&
+      data.caption_en.trim().length > 0 &&
       Array.isArray(data.hashtags)
     ) {
       const hashtags = (data.hashtags as unknown[])
