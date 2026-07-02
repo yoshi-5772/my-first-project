@@ -1688,8 +1688,12 @@ const VENDOR_SEED = [
   '大地館','ベルプラス','楽天','アマゾン','Amazon','ベルプラスワン','メルヘン','川鉄','チャコ','橋市','サンデー',
   'セリア','ダイソー','ジュンク','テンポス','薬王堂','ローソン','食品衛生協会','イオン','ツルハ',
   '瀬物産','三本コーヒー','白陽社','門埼五牧場','服部コーヒー','戸塚商店','フタバ','UCC',
-  '八幡平ジオファーム','sugawara'
+  '八幡平ジオファーム','sugawara','タカショウ','ルートイン',
+  // 光熱費・雑費系（原価率には影響させない経費として使う想定）
+  '電気代','水道代','ガス代','電話代','ゴミ収集','百均','キャンドゥ','ワッツ'
 ];
+// このいずれかを含む業者名を選んだ場合、支出の区分を自動で「経費」にする（原価率に含めない）
+const NON_COGS_VENDOR_HINTS = ['電気代','水道代','ガス代','電話代','ゴミ収集','百均','セリア','ダイソー','キャンドゥ','ワッツ'];
 // カード/電子マネー/その他の列構成。増減・改名はここだけ変更すればよい
 const SALES_PAYMENT_COLUMNS = [
   { key: 'card',    label: 'カード' },
@@ -1995,7 +1999,7 @@ function renderCashLedger() {
           <option value="purchase" selected>仕入れ</option>
           <option value="other">経費</option>
         </select>
-        <input type="text" id="cf-payee" class="name-input" list="cash-payee-list" placeholder="仕入先・支払先名（必須）" style="flex:2" onfocus="selAll(this)">
+        <input type="text" id="cf-payee" class="name-input" list="cash-payee-list" placeholder="仕入先・支払先名（必須）" style="flex:2" onfocus="selAll(this)" oninput="onCashPayeeInput(this.value)">
         <select id="cf-tax" style="flex:none;width:80px">
           <option value="8">8%</option>
           <option value="10" selected>10%</option>
@@ -2023,6 +2027,13 @@ function onCashKindChange() {
   document.getElementById('cf-tax').style.display = kind === 'expense' ? '' : 'none';
   document.getElementById('cf-category').style.display = kind === 'expense' ? '' : 'none';
   document.getElementById('cf-payee').placeholder = kind === 'expense' ? '仕入先・支払先名（必須）' : '摘要（例: 現金売上）';
+}
+
+// 電気代・セリアなど原価に含めない業者名を選んだら、区分を自動で「経費」に切り替える
+function onCashPayeeInput(value) {
+  const categorySel = document.getElementById('cf-category');
+  if (!categorySel) return;
+  if (NON_COGS_VENDOR_HINTS.some(v => value.includes(v))) categorySel.value = 'other';
 }
 
 function addCashEntry() {
