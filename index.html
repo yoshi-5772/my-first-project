@@ -155,6 +155,41 @@
       display: inline-block; margin-left: 8px; vertical-align: middle;
     }
 
+    /* 進捗ダッシュボード（サマリータブ上部） */
+    .dashboard { margin-bottom: 20px; }
+    .kpi-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+    .kpi-tile { flex: 1; min-width: 180px; background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.1); padding: 16px 18px; }
+    .kpi-tile .kpi-label { font-size: 0.8rem; color: #888; margin-bottom: 6px; }
+    .kpi-tile .kpi-value { font-size: 1.6rem; font-weight: 700; color: #1e5631; }
+    .kpi-tile .kpi-delta { font-size: 0.8rem; margin-top: 4px; }
+    .kpi-delta.up { color: #006300; }
+    .kpi-delta.down { color: #d03b3b; }
+    .kpi-delta.flat { color: #898781; }
+
+    .goal-bar-wrap { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.1); padding: 16px 18px; margin-bottom: 16px; }
+    .goal-bar-track { position: relative; height: 22px; background: #e1e0d9; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+    .goal-bar-fill { height: 100%; background: #2a78d6; border-radius: 4px 0 0 4px; transition: width .2s; }
+    .goal-bar-fill.achieved { box-shadow: inset 0 0 0 2px #0ca30c; }
+
+    .compare-bars { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.1); padding: 16px 18px; margin-bottom: 16px; }
+    .compare-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    .compare-row .compare-label { width: 84px; font-size: 0.82rem; color: #555; flex-shrink: 0; }
+    .compare-row .compare-track { flex: 1; background: #f4f7f4; border-radius: 4px; height: 20px; }
+    .compare-row .compare-fill { height: 100%; border-radius: 4px; background: #86b6ef; }
+    .compare-row.current .compare-fill { background: #2a78d6; }
+    .compare-row .compare-amt { width: 88px; text-align: right; font-size: 0.82rem; color: #444; flex-shrink: 0; }
+
+    @media (max-width: 480px) {
+      .kpi-row { flex-direction: column; }
+      .compare-row .compare-label { width: 60px; font-size: 0.75rem; }
+      .compare-row .compare-amt { width: 70px; font-size: 0.75rem; }
+    }
+
+    @media print {
+      .kpi-row, .compare-bars, .goal-bar-wrap { box-shadow: none; border: 1px solid #ccc; }
+      .compare-bars, .goal-bar-wrap { margin-bottom: 10px; }
+    }
+
     /* 写真OCRモーダル */
     .modal-bg {
       display: none; position: fixed; inset: 0;
@@ -469,7 +504,7 @@ function sortByCommonOrder(items, order) {
 }
 
 const WINE_TABS = ['ワイン(ボトル)','ワイン(グラス白)','ワイン(グラス赤)','日本酒'];
-const CATEGORIES = ['サマリー','精肉','食材','調味料','酒/飲材','備品/包材', ...WINE_TABS];
+const CATEGORIES = ['サマリー','現金出納帳','売上表','精肉','食材','調味料','酒/飲材','備品/包材', ...WINE_TABS];
 const DATA_CATS = ['精肉','食材','調味料','酒/飲材','備品/包材'];
 
 const RAW = {
@@ -619,6 +654,8 @@ function changeMonth(delta) {
   const d = new Date(y, m - 1 + delta, 1);
   const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   initMonth(ym);
+  initCashMonth(ym);
+  initSalesMonth(ym);
   renderTabs();
   renderPanel();
 }
@@ -652,7 +689,7 @@ function renderSummary() {
     </tr>`;
   }).join('');
 
-  document.getElementById('panel').innerHTML = `
+  document.getElementById('panel').innerHTML = renderSalesDashboard() + `
     <div class="card">
       <div class="card-header">
         <h2>部門別合計</h2>
@@ -682,9 +719,11 @@ function catTotal(cat) {
 // ---- カテゴリパネル ----
 function renderPanel() {
   const summaryBar = document.getElementById('grand-summary-bar');
-  if (summaryBar) summaryBar.style.display = WINE_TABS.includes(activeTab) ? 'none' : '';
+  if (summaryBar) summaryBar.style.display = (WINE_TABS.includes(activeTab) || LEDGER_TABS.includes(activeTab)) ? 'none' : '';
   if (activeTab === 'サマリー') { renderSummary(); return; }
   if (WINE_TABS.includes(activeTab)) { renderWinePanel(activeTab); return; }
+  if (activeTab === '現金出納帳') { renderCashLedger(); return; }
+  if (activeTab === '売上表') { renderSalesSheet(); return; }
   const cat = activeTab;
   const items = data[cat];
   const totalAmt = items.reduce((s,x) => s + x.price * x.qty, 0);
@@ -1639,6 +1678,540 @@ async function convertToKatakana(evt) {
   }
 }
 
+// ================== 現金出納帳・売上表 ==================
+const WEEKDAY_LABELS = ['日','月','火','水','木','金','土'];
+const CASH_KIND_LABELS = { sales: '現金売上', other_income: 'その他収入', expense: '仕入・経費' };
+// カード/電子マネー/その他の列構成。増減・改名はここだけ変更すればよい
+const SALES_PAYMENT_COLUMNS = [
+  { key: 'card',   label: 'カード' },
+  { key: 'emoney', label: '電子マネー' },
+  { key: 'other',  label: 'その他' }
+];
+const LEDGER_TABS = ['現金出納帳', '売上表'];
+
+function shiftYm(ym, delta) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function daysInMonth(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+}
+function weekdayOfDay(ym, day) {
+  const [y, m] = ym.split('-').map(Number);
+  return WEEKDAY_LABELS[new Date(y, m - 1, day).getDay()];
+}
+
+function cashKey(ym) { return `cash_${ym}`; }
+function salesKey(ym) { return `sales_${ym}`; }
+
+function loadCashRecord(ym) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(cashKey(ym)));
+    if (saved) return saved;
+  } catch {}
+  return { openingBalance: null, entries: [] };
+}
+function loadSalesRecord(ym) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(salesKey(ym)));
+    if (saved) return saved;
+  } catch {}
+  return { days: {}, target: null };
+}
+
+// 前月繰越はスナップショット保存せず、表示のたびに前月チェーンをたどってライブ計算する
+// （過去月を後から修正しても、以降の月の残高が古いまま固定されない）。
+// セッション内でのみメモ化し、saveCash() のたびに破棄する。
+let openingBalanceCache = new Map();
+function cashOpeningBalance(ym) {
+  if (openingBalanceCache.has(ym)) return openingBalanceCache.get(ym);
+  const prevYm = shiftYm(ym, -1);
+  let val;
+  if (localStorage.getItem(cashKey(prevYm)) != null) {
+    val = cashClosingBalance(prevYm);
+  } else {
+    // それより前の記録が無い最初の月だけ、手動で設定した開始残高を使う
+    val = loadCashRecord(ym).openingBalance || 0;
+  }
+  openingBalanceCache.set(ym, val);
+  return val;
+}
+function cashClosingBalance(ym) {
+  const rec = loadCashRecord(ym);
+  let bal = cashOpeningBalance(ym);
+  (rec.entries || []).forEach(e => { bal += (e.kind === 'expense' ? -e.amount : e.amount); });
+  return bal;
+}
+
+let cashData = { openingBalance: null, entries: [] };
+function initCashMonth(ym) {
+  cashData = loadCashRecord(ym);
+  saveCash(); // 新規月なら空の記録として保存し、「0件月」と「未訪問月」を区別できるようにする
+}
+function saveCash() {
+  localStorage.setItem(cashKey(currentMonth), JSON.stringify(cashData));
+  openingBalanceCache.clear();
+}
+
+function latestSalesRecordKey() {
+  const keys = Object.keys(localStorage).filter(k => k.startsWith('sales_')).sort().reverse();
+  return keys.length ? keys[0] : null;
+}
+
+let salesData = { days: {}, target: null };
+function initSalesMonth(ym) {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(salesKey(ym))); } catch {}
+  if (saved) {
+    salesData = saved;
+  } else {
+    // 目標金額だけは前月から引き継ぐ（残高と違い、単なる編集可能な既定値なのでスナップショットで問題ない）
+    let target = null;
+    const prevKey = latestSalesRecordKey();
+    if (prevKey) {
+      try { target = JSON.parse(localStorage.getItem(prevKey)).target ?? null; } catch {}
+    }
+    salesData = { days: {}, target };
+  }
+  saveSales();
+}
+function saveSales() { localStorage.setItem(salesKey(currentMonth), JSON.stringify(salesData)); }
+
+function ensureSalesDay(day) {
+  if (!salesData.days[day]) salesData.days[day] = { cashOverride: null, card: 0, emoney: 0, other: 0, memo: '' };
+  const rec = salesData.days[day];
+  SALES_PAYMENT_COLUMNS.forEach(c => { if (rec[c.key] == null) rec[c.key] = 0; });
+  return rec;
+}
+
+// 当日の売上表1行分をまとめて計算する（現金は現金出納帳のsalesエントリ自動集計 or 手動上書き）
+function computeSalesDay(day) {
+  const rec = ensureSalesDay(day);
+  const autoCash = cashData.entries.filter(e => e.kind === 'sales' && e.day === day).reduce((s,e) => s + e.amount, 0);
+  const isOverride = rec.cashOverride != null;
+  const cash = isOverride ? rec.cashOverride : autoCash;
+  const expenses = cashData.entries.filter(e => e.kind === 'expense' && e.day === day);
+  const expenseTotal = expenses.reduce((s,e) => s + e.amount, 0);
+  const paymentTotal = cash + SALES_PAYMENT_COLUMNS.reduce((s,c) => s + (rec[c.key]||0), 0);
+  return { day, rec, autoCash, isOverride, cash, expenses, expenseTotal, paymentTotal };
+}
+
+// ダッシュボード比較用：任意の月（表示中でなくてもよい）の売上合計を副作用なく算出する
+function computeMonthSalesTotal(ym) {
+  const cashRec = loadCashRecord(ym);
+  const salesRec = loadSalesRecord(ym);
+  const max = daysInMonth(ym);
+  let total = 0;
+  for (let day = 1; day <= max; day++) {
+    const dayRec = salesRec.days[day] || {};
+    const autoCash = cashRec.entries.filter(e => e.kind === 'sales' && e.day === day).reduce((s,e) => s + e.amount, 0);
+    const cash = dayRec.cashOverride != null ? dayRec.cashOverride : autoCash;
+    const others = SALES_PAYMENT_COLUMNS.reduce((s,c) => s + (dayRec[c.key]||0), 0);
+    total += cash + others;
+  }
+  return total;
+}
+
+function sortedCashEntries() {
+  return cashData.entries
+    .map((entry, i) => ({ entry, i }))
+    .sort((a, b) => a.entry.day - b.entry.day);
+}
+
+// ---- 現金出納帳タブ ----
+let lastUsedCashDay = null;
+
+function defaultCashDay() {
+  const max = daysInMonth(currentMonth);
+  if (lastUsedCashDay && lastUsedCashDay <= max) return lastUsedCashDay;
+  const now = new Date();
+  const nowYm = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  return currentMonth === nowYm ? Math.min(now.getDate(), max) : 1;
+}
+
+function renderCashLedger() {
+  const opening = cashOpeningBalance(currentMonth);
+  const closing = cashClosingBalance(currentMonth);
+  const sorted = sortedCashEntries();
+  let incomeTotal = 0, expense8Total = 0, expense10Total = 0;
+  let runningBalance = opening;
+  const rowsByDay = {};
+  sorted.forEach(({ entry, i }) => {
+    runningBalance += (entry.kind === 'expense' ? -entry.amount : entry.amount);
+    if (entry.kind === 'expense') {
+      if (entry.taxRate === 8) expense8Total += entry.amount; else expense10Total += entry.amount;
+    } else {
+      incomeTotal += entry.amount;
+    }
+    if (!rowsByDay[entry.day]) rowsByDay[entry.day] = [];
+    rowsByDay[entry.day].push({ entry, i, balance: runningBalance });
+  });
+  const expenseTotal = expense8Total + expense10Total;
+
+  let bodyHtml;
+  if (!sorted.length) {
+    bodyHtml = `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">この月の記録はまだありません</td></tr>`;
+  } else {
+    bodyHtml = Object.keys(rowsByDay).map(Number).sort((a,b) => a-b).map(day => {
+      const dayRows = rowsByDay[day].map(({ entry, i, balance }) => `
+        <tr>
+          <td>${CASH_KIND_LABELS[entry.kind]}</td>
+          <td>${escapeHtml(entry.payee)}</td>
+          <td class="right">¥${entry.amount.toLocaleString()}</td>
+          <td>${entry.taxRate ? `<span class="tax-badge">${entry.taxRate}%</span>` : ''}</td>
+          <td class="right">¥${balance.toLocaleString()}</td>
+          <td><button class="btn-del" onclick="delCashEntry(${i})">削除</button></td>
+        </tr>`).join('');
+      return `<tr class="wine-group-header"><td colspan="6"><strong>${day}日(${weekdayOfDay(currentMonth, day)})</strong></td></tr>${dayRows}`;
+    }).join('');
+  }
+
+  const noPrevMonth = localStorage.getItem(cashKey(shiftYm(currentMonth, -1))) == null;
+  const openingEditor = noPrevMonth ? `
+    <div class="form-row" style="background:#fff">
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#555">開始残高（この月より前の記録が無いため手動で設定できます）
+        <input type="number" id="cf-opening" class="qty-input" value="${cashData.openingBalance ?? 0}" onfocus="selAll(this)" onblur="updateCashOpeningBalance(this.value)" style="width:120px">
+      </label>
+    </div>` : '';
+
+  const dayOptions = Array.from({length: daysInMonth(currentMonth)}, (_, idx) => idx + 1)
+    .map(d => `<option value="${d}" ${d === defaultCashDay() ? 'selected' : ''}>${d}日(${weekdayOfDay(currentMonth, d)})</option>`).join('');
+
+  document.getElementById('panel').innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <h2>現金出納帳 <span style="font-size:0.85rem;font-weight:400;color:#555;margin-left:12px">当月残高: <strong style="color:#1e5631">¥${closing.toLocaleString()}</strong></span></h2>
+        <div class="top-btns">
+          <button class="btn btn-blue" onclick="downloadCashCSV()">CSVダウンロード</button>
+          <button class="btn btn-orange" onclick="window.print()">印刷</button>
+        </div>
+      </div>
+      ${openingEditor}
+      <div class="form-row">
+        <select id="cf-day" style="flex:none;width:110px">${dayOptions}</select>
+        <select id="cf-kind" onchange="onCashKindChange()" style="flex:none;width:120px">
+          <option value="sales">現金売上</option>
+          <option value="other_income">その他収入</option>
+          <option value="expense" selected>仕入・経費</option>
+        </select>
+        <input type="text" id="cf-payee" class="name-input" placeholder="仕入先・支払先名（必須）" style="flex:2" onfocus="selAll(this)">
+        <select id="cf-tax" style="flex:none;width:80px">
+          <option value="8">8%</option>
+          <option value="10" selected>10%</option>
+        </select>
+        <input type="text" id="cf-amount" class="qty-input" inputmode="decimal" placeholder="金額" onfocus="selAll(this)" style="width:100px">
+        <button class="btn btn-green" onclick="addCashEntry()">追加</button>
+      </div>
+      <table>
+        <thead><tr><th>区分</th><th>摘要</th><th class="right">金額</th><th>税率</th><th class="right">残高</th><th></th></tr></thead>
+        <tbody>${bodyHtml}</tbody>
+      </table>
+      <div class="section-total" style="flex-wrap:wrap">
+        <span>前月繰越: <strong>¥${opening.toLocaleString()}</strong></span>
+        <span>収入合計: <strong>¥${incomeTotal.toLocaleString()}</strong></span>
+        <span>支出8%: <strong>¥${expense8Total.toLocaleString()}</strong></span>
+        <span>支出10%: <strong>¥${expense10Total.toLocaleString()}</strong></span>
+        <span>支出合計: <strong>¥${expenseTotal.toLocaleString()}</strong></span>
+        <span>当月残高: <strong>¥${closing.toLocaleString()}</strong></span>
+      </div>
+    </div>`;
+}
+
+function onCashKindChange() {
+  const kind = document.getElementById('cf-kind').value;
+  document.getElementById('cf-tax').style.display = kind === 'expense' ? '' : 'none';
+  document.getElementById('cf-payee').placeholder = kind === 'expense' ? '仕入先・支払先名（必須）' : '摘要（例: 現金売上）';
+}
+
+function addCashEntry() {
+  const day = parseInt(document.getElementById('cf-day').value, 10);
+  const kind = document.getElementById('cf-kind').value;
+  let payee = document.getElementById('cf-payee').value.trim();
+  const amount = parseFloat(document.getElementById('cf-amount').value);
+  const taxRate = kind === 'expense' ? parseInt(document.getElementById('cf-tax').value, 10) : null;
+  if (kind === 'expense' && !payee) { alert('支払先名を入力してください'); return; }
+  if (!payee) payee = CASH_KIND_LABELS[kind];
+  if (isNaN(amount) || amount <= 0) { alert('金額を入力してください'); return; }
+  cashData.entries.push({ day, kind, payee, amount, taxRate });
+  saveCash();
+  lastUsedCashDay = day; // 同日に連続入力しやすいよう、直近の日付を保持する
+  document.getElementById('cf-payee').value = '';
+  document.getElementById('cf-amount').value = '';
+  renderPanel();
+}
+
+function delCashEntry(i) {
+  if (!confirm(`「${cashData.entries[i].payee}」を削除しますか？`)) return;
+  cashData.entries.splice(i, 1);
+  saveCash();
+  renderPanel();
+}
+
+function updateCashOpeningBalance(val) {
+  const n = parseFloat(val);
+  cashData.openingBalance = isNaN(n) ? 0 : n;
+  saveCash();
+  renderPanel();
+}
+
+// ---- 売上表タブ ----
+function renderSalesSheet() {
+  const max = daysInMonth(currentMonth);
+  const paymentHeaders = SALES_PAYMENT_COLUMNS.map(c => `<th class="right">${c.label}</th>`).join('');
+  let rows = '';
+  for (let day = 1; day <= max; day++) rows += salesRowHtml(day);
+
+  document.getElementById('panel').innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <h2>売上表</h2>
+        <div class="top-btns">
+          <button class="btn btn-blue" onclick="downloadSalesCSV()">CSVダウンロード</button>
+          <button class="btn btn-orange" onclick="window.print()">印刷</button>
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>日付</th><th>曜日</th><th class="right">現金</th>${paymentHeaders}<th class="right">売上合計</th><th>仕入・経費</th><th class="right">経費合計</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr style="background:#f4f7f4;font-weight:600">
+          <td colspan="2">月計</td>
+          <td class="right" id="sales-foot-cash"></td>
+          ${SALES_PAYMENT_COLUMNS.map(c => `<td class="right" id="sales-foot-${c.key}"></td>`).join('')}
+          <td class="right" id="sales-foot-total"></td>
+          <td></td>
+          <td class="right" id="sales-foot-expense"></td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+  refreshSalesFooter();
+}
+
+function salesRowHtml(day) {
+  const c = computeSalesDay(day);
+  const overrideBadge = c.isOverride
+    ? `<span class="tax-badge" title="自動計算を手動で上書き中">手動</span> <button class="btn-del" onclick="resetSalesCashOverride(${day})">自動に戻す</button>`
+    : '';
+  const expenseList = c.expenses.length
+    ? c.expenses.map(e => `<small class="muted">${escapeHtml(e.payee)} ¥${e.amount.toLocaleString()}</small><br>`).join('')
+    : '<span class="muted">—</span>';
+  const paymentCells = SALES_PAYMENT_COLUMNS.map(col => `
+    <td class="right">
+      <input class="qty-input" type="text" inputmode="decimal" value="${c.rec[col.key]}"
+        onfocus="selAll(this)" oninput="updateSalesField(${day},'${col.key}',this.value)"
+        onblur="blurNumSales(this,${day},'${col.key}')">
+      <span class="print-val">¥${(c.rec[col.key]||0).toLocaleString()}</span>
+    </td>`).join('');
+  return `<tr id="sales-row-${day}">
+    <td>${day}日</td>
+    <td class="muted">${weekdayOfDay(currentMonth, day)}</td>
+    <td class="right">
+      <input class="qty-input" type="text" inputmode="decimal" value="${c.cash}"
+        onfocus="selAll(this)" oninput="updateSalesCashOverride(${day},this.value)"
+        onblur="blurNumSales(this,${day},'cash')">
+      <span class="print-val">¥${c.cash.toLocaleString()}</span>
+      <span id="sales-cash-badge-${day}">${overrideBadge}</span>
+    </td>
+    ${paymentCells}
+    <td class="right" id="sales-total-${day}">¥${c.paymentTotal.toLocaleString()}</td>
+    <td id="sales-expense-list-${day}">${expenseList}</td>
+    <td class="right" id="sales-expense-${day}">¥${c.expenseTotal.toLocaleString()}</td>
+  </tr>`;
+}
+
+// 入力欄自体は再生成せず、隣接する小計・バッジだけを書き換える（フォーカス落ち防止）
+function refreshSalesRow(day) {
+  const c = computeSalesDay(day);
+  const totalEl = document.getElementById(`sales-total-${day}`);
+  if (totalEl) totalEl.textContent = `¥${c.paymentTotal.toLocaleString()}`;
+  const expEl = document.getElementById(`sales-expense-${day}`);
+  if (expEl) expEl.textContent = `¥${c.expenseTotal.toLocaleString()}`;
+  const badgeEl = document.getElementById(`sales-cash-badge-${day}`);
+  if (badgeEl) {
+    badgeEl.innerHTML = c.isOverride
+      ? `<span class="tax-badge" title="自動計算を手動で上書き中">手動</span> <button class="btn-del" onclick="resetSalesCashOverride(${day})">自動に戻す</button>`
+      : '';
+  }
+}
+
+function refreshSalesFooter() {
+  const max = daysInMonth(currentMonth);
+  let cashSum = 0, expenseSum = 0, totalSum = 0;
+  const colSums = {}; SALES_PAYMENT_COLUMNS.forEach(c => colSums[c.key] = 0);
+  for (let day = 1; day <= max; day++) {
+    const c = computeSalesDay(day);
+    cashSum += c.cash;
+    expenseSum += c.expenseTotal;
+    totalSum += c.paymentTotal;
+    SALES_PAYMENT_COLUMNS.forEach(col => colSums[col.key] += (c.rec[col.key]||0));
+  }
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = `¥${val.toLocaleString()}`; };
+  set('sales-foot-cash', cashSum);
+  SALES_PAYMENT_COLUMNS.forEach(c => set(`sales-foot-${c.key}`, colSums[c.key]));
+  set('sales-foot-total', totalSum);
+  set('sales-foot-expense', expenseSum);
+}
+
+function updateSalesField(day, key, value) {
+  ensureSalesDay(day)[key] = parseFloat(value) || 0;
+  saveSales();
+  refreshSalesRow(day);
+  refreshSalesFooter();
+}
+
+function updateSalesCashOverride(day, value) {
+  const n = parseFloat(value);
+  ensureSalesDay(day).cashOverride = isNaN(n) ? 0 : n;
+  saveSales();
+  refreshSalesRow(day);
+  refreshSalesFooter();
+}
+
+function resetSalesCashOverride(day) {
+  ensureSalesDay(day).cashOverride = null;
+  saveSales();
+  renderPanel();
+}
+
+// blurNum（DATA_CATS専用のcat/i引数を取る）とは別に、売上表用の小さな同等品を用意する
+function blurNumSales(el, day, field) {
+  if (el.value !== '') return;
+  el.value = el.dataset.prev || '0';
+  if (field === 'cash') updateSalesCashOverride(day, el.value);
+  else updateSalesField(day, field, el.value);
+}
+
+// ---- CSVダウンロード ----
+function downloadCashCSV() {
+  let csv = '﻿日付,曜日,区分,摘要,金額,税率,残高\n';
+  const opening = cashOpeningBalance(currentMonth);
+  let bal = opening, incomeTotal = 0, expense8 = 0, expense10 = 0;
+  sortedCashEntries().forEach(({ entry }) => {
+    bal += (entry.kind === 'expense' ? -entry.amount : entry.amount);
+    if (entry.kind === 'expense') { if (entry.taxRate === 8) expense8 += entry.amount; else expense10 += entry.amount; }
+    else incomeTotal += entry.amount;
+    csv += `${entry.day},${weekdayOfDay(currentMonth, entry.day)},${CASH_KIND_LABELS[entry.kind]},"${String(entry.payee).replace(/"/g,'""')}",${entry.amount},${entry.taxRate||''},${bal}\n`;
+  });
+  csv += `\n前月繰越,,,,,,${opening}\n`;
+  csv += `収入合計,,,,${incomeTotal}\n`;
+  csv += `支出合計(8%),,,,${expense8}\n`;
+  csv += `支出合計(10%),,,,${expense10}\n`;
+  csv += `当月残高,,,,,,${bal}\n`;
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `現金出納帳_${currentMonth}.csv`;
+  a.click();
+}
+
+function downloadSalesCSV() {
+  const max = daysInMonth(currentMonth);
+  const header = ['日付','曜日','現金', ...SALES_PAYMENT_COLUMNS.map(c => c.label), '売上合計','仕入経費合計'];
+  let csv = '﻿' + header.join(',') + '\n';
+  let cashSum = 0, totalSum = 0, expenseSum = 0;
+  const colSums = {}; SALES_PAYMENT_COLUMNS.forEach(c => colSums[c.key] = 0);
+  for (let day = 1; day <= max; day++) {
+    const c = computeSalesDay(day);
+    cashSum += c.cash; totalSum += c.paymentTotal; expenseSum += c.expenseTotal;
+    SALES_PAYMENT_COLUMNS.forEach(col => colSums[col.key] += (c.rec[col.key]||0));
+    const row = [day, weekdayOfDay(currentMonth, day), c.cash, ...SALES_PAYMENT_COLUMNS.map(col => c.rec[col.key]||0), c.paymentTotal, c.expenseTotal];
+    csv += row.join(',') + '\n';
+  }
+  csv += ['月計','', cashSum, ...SALES_PAYMENT_COLUMNS.map(c => colSums[c.key]), totalSum, expenseSum].join(',') + '\n';
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `売上表_${currentMonth}.csv`;
+  a.click();
+}
+
+// ---- 進捗ダッシュボード（サマリータブ上部） ----
+function compareRowHtml(label, amount, maxTotal, isCurrent, hasData = true) {
+  if (!hasData) {
+    return `<div class="compare-row"><div class="compare-label">${label}</div><div class="compare-track"></div><div class="compare-amt" style="color:#898781">データなし</div></div>`;
+  }
+  const pct = maxTotal > 0 ? Math.round(amount / maxTotal * 100) : 0;
+  return `<div class="compare-row ${isCurrent ? 'current' : ''}">
+    <div class="compare-label">${label}</div>
+    <div class="compare-track"><div class="compare-fill" style="width:${pct}%"></div></div>
+    <div class="compare-amt">¥${amount.toLocaleString()}</div>
+  </div>`;
+}
+
+function kpiDeltaHtml(current, prev, hasPrev) {
+  if (!hasPrev) return `<div class="kpi-delta flat">前月データなし</div>`;
+  if (prev === 0) return `<div class="kpi-delta flat">前月比 —</div>`;
+  const pct = Math.round((current - prev) / prev * 100);
+  const cls = pct > 0 ? 'up' : (pct < 0 ? 'down' : 'flat');
+  const arrow = pct > 0 ? '▲' : (pct < 0 ? '▼' : '→');
+  return `<div class="kpi-delta ${cls}">${arrow} 前月比 ${pct > 0 ? '+' : ''}${pct}%</div>`;
+}
+
+function renderSalesDashboard() {
+  const ym = currentMonth;
+  const prevYm = shiftYm(ym, -1);
+  const prevYearYm = shiftYm(ym, -12);
+  const currentTotal = computeMonthSalesTotal(ym);
+  const hasPrevMonth = localStorage.getItem(cashKey(prevYm)) != null || localStorage.getItem(salesKey(prevYm)) != null;
+  const prevMonthTotal = hasPrevMonth ? computeMonthSalesTotal(prevYm) : 0;
+  const hasPrevYear = localStorage.getItem(cashKey(prevYearYm)) != null || localStorage.getItem(salesKey(prevYearYm)) != null;
+  const prevYearTotal = hasPrevYear ? computeMonthSalesTotal(prevYearYm) : 0;
+  const cashBalance = cashClosingBalance(ym);
+  const target = salesData.target;
+  const pct = target ? Math.round(currentTotal / target * 100) : null;
+  const barPct = target ? Math.min(100, Math.max(0, Math.round(currentTotal / target * 100))) : 0;
+  const achieved = target != null && currentTotal >= target;
+  const maxTotal = Math.max(currentTotal, prevMonthTotal, prevYearTotal, 1);
+
+  return `
+    <div class="dashboard">
+      <div class="kpi-row">
+        <div class="kpi-tile">
+          <div class="kpi-label">今月の売上合計</div>
+          <div class="kpi-value">¥${currentTotal.toLocaleString()}</div>
+          ${kpiDeltaHtml(currentTotal, prevMonthTotal, hasPrevMonth)}
+        </div>
+        <div class="kpi-tile">
+          <div class="kpi-label">当月の現金残高</div>
+          <div class="kpi-value">¥${cashBalance.toLocaleString()}</div>
+        </div>
+        <div class="kpi-tile">
+          <div class="kpi-label">目標達成率</div>
+          <div class="kpi-value">${target != null ? pct + '%' : '—'}</div>
+          <div class="kpi-delta flat">${target != null ? `目標 ¥${target.toLocaleString()}` : '目標を設定してください'}</div>
+        </div>
+      </div>
+      <div class="goal-bar-wrap">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
+          <div style="font-size:0.85rem;color:#555">目標達成バー</div>
+          <div style="font-size:0.8rem;color:#888">
+            目標金額: <input type="number" id="db-target" class="qty-input" value="${target ?? ''}" placeholder="未設定" onfocus="selAll(this)" onblur="updateSalesTarget(this.value)" style="width:110px">円
+          </div>
+        </div>
+        <div class="goal-bar-track">
+          <div class="goal-bar-fill ${achieved ? 'achieved' : ''}" style="width:${barPct}%"></div>
+        </div>
+        <div style="font-size:0.78rem;color:#666;margin-top:4px">¥${currentTotal.toLocaleString()} / ${target != null ? '¥'+target.toLocaleString() : '目標未設定'}${achieved ? ' ✓ 達成' : ''}</div>
+      </div>
+      <div class="compare-bars">
+        <h3 style="font-size:0.9rem;color:#1e5631;margin-bottom:4px">前月・前年同月比較</h3>
+        ${compareRowHtml('今月', currentTotal, maxTotal, true)}
+        ${compareRowHtml('前月', prevMonthTotal, maxTotal, false, hasPrevMonth)}
+        ${compareRowHtml('前年同月', prevYearTotal, maxTotal, false, hasPrevYear)}
+      </div>
+    </div>`;
+}
+
+function updateSalesTarget(val) {
+  const n = parseFloat(val);
+  salesData.target = (val === '' || isNaN(n)) ? null : n;
+  saveSales();
+  renderPanel();
+}
+
 // ---- バックアップ ----
 function showBackupStatus(msg) {
   const el = document.getElementById('backup-status');
@@ -1650,7 +2223,9 @@ function showBackupStatus(msg) {
 
 function exportBackup() {
   const out = {};
-  Object.keys(localStorage).filter(k => k.startsWith('inv_') && !k.startsWith('inv_autobk_')).forEach(k => {
+  Object.keys(localStorage).filter(k =>
+    (k.startsWith('inv_') && !k.startsWith('inv_autobk_')) || k.startsWith('cash_') || k.startsWith('sales_')
+  ).forEach(k => {
     out[k] = JSON.parse(localStorage.getItem(k));
   });
   const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
@@ -1671,10 +2246,14 @@ function importBackup(input) {
       const obj = JSON.parse(e.target.result);
       let count = 0;
       Object.keys(obj).forEach(k => {
-        if (k.startsWith('inv_')) { localStorage.setItem(k, JSON.stringify(obj[k])); count++; }
+        if (k.startsWith('inv_') || k.startsWith('cash_') || k.startsWith('sales_')) {
+          localStorage.setItem(k, JSON.stringify(obj[k])); count++;
+        }
       });
       alert(`${count}ヶ月分のデータを復元しました。`);
-      initMonth(currentMonth); renderTabs(); renderPanel();
+      openingBalanceCache.clear();
+      initMonth(currentMonth); initCashMonth(currentMonth); initSalesMonth(currentMonth);
+      renderTabs(); renderPanel();
     } catch { alert('ファイルが壊れています'); }
   };
   reader.readAsText(file);
@@ -1741,6 +2320,8 @@ document.getElementById('panel').addEventListener('keydown', e => {
 const now = new Date();
 const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 initMonth(thisMonth);
+initCashMonth(thisMonth);
+initSalesMonth(thisMonth);
 loadWineData();
 document.getElementById('wine-variety-list').innerHTML =
   WINE_VARIETY_LIST.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
