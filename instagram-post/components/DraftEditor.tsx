@@ -34,10 +34,22 @@ export default function DraftEditor({
 }: DraftEditorProps) {
   const [showEnglish, setShowEnglish] = useState(false);
   const [newTag, setNewTag] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const finalText = buildFinalText(captionJa, captionEn, hashtags);
   const isTruncated = finalText.length > FEED_PREVIEW_LIMIT;
   const truncatedText = isTruncated ? `${finalText.slice(0, FEED_PREVIEW_LIMIT)}…` : finalText;
+
+  async function handleCopy() {
+    const text = [captionJa.trim(), captionEn.trim()].filter(Boolean).join("\n\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // クリップボードAPIが使えない環境ではボタンを無反応にするだけに留める
+    }
+  }
 
   function addTag() {
     const tag = newTag.trim();
@@ -98,6 +110,14 @@ export default function DraftEditor({
             className="text-sm font-medium text-accent underline underline-offset-2 disabled:opacity-40"
           >
             この写真で作り直す
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="inline-flex items-center gap-1 text-sm font-medium text-accent underline underline-offset-2"
+          >
+            {copied ? "コピーしました ✓" : "日本語・英語をコピー"}
           </button>
 
           <div className="space-y-1">
