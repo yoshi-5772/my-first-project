@@ -331,6 +331,7 @@
     <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px" onclick="changeMonth(-1)">◀</button>
     <span id="month-label" style="font-size:1rem;font-weight:600;min-width:90px;text-align:center"></span>
     <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px" onclick="changeMonth(1)">▶</button>
+    <button class="btn" style="background:rgba(255,255,255,0.2);color:#fff;padding:5px 10px;font-size:0.8rem" onclick="syncItemsToFutureMonths()">↻ 品目を今後へ反映</button>
     <button class="btn" style="background:rgba(255,255,255,0.2);color:#fff;padding:5px 10px;font-size:0.8rem" onclick="exportBackup()">💾 バックアップ</button>
     <label class="btn" style="background:rgba(255,255,255,0.12);color:#fff;padding:5px 10px;font-size:0.8rem;cursor:pointer">
       📂 復元<input type="file" accept=".json" style="display:none" onchange="importBackup(this)">
@@ -1681,6 +1682,41 @@ function importBackup(input) {
   };
   reader.readAsText(file);
   input.value = '';
+}
+
+// 今表示中の月の品名・単位・単価を、すでに保存済みの未来の月へ反映する（数量は変更しない）
+function syncItemsToFutureMonths() {
+  const futureKeys = Object.keys(localStorage)
+    .filter(k => k.startsWith('inv_') && !k.startsWith('inv_autobk_') && k !== monthKey(currentMonth))
+    .filter(k => k.slice(4) > currentMonth)
+    .sort();
+  if (!futureKeys.length) {
+    alert(`${currentMonth}より後の月にはまだ保存済みデータがありません。\n新しい月を開けば自動的に品名・単価が引き継がれます。`);
+    return;
+  }
+  if (!confirm(`${currentMonth}の品名・単位・単価を、次の${futureKeys.length}ヶ月分に反映します（数量はそのまま残ります）。\n${futureKeys.map(k => k.slice(4)).join(', ')}\n\nよろしいですか？`)) return;
+
+  futureKeys.forEach(key => {
+    const future = JSON.parse(localStorage.getItem(key));
+    DATA_CATS.forEach(cat => {
+      const src = data[cat] || [];
+      const dst = future[cat] || (future[cat] = []);
+      const n = Math.min(src.length, dst.length);
+      for (let i = 0; i < n; i++) {
+        dst[i].name = src[i].name;
+        dst[i].unit = src[i].unit;
+        dst[i].priceEx = src[i].priceEx;
+        dst[i].price = tin(src[i].priceEx, cat);
+      }
+      // 今月で追加された品目は数量0で追加
+      for (let i = dst.length; i < src.length; i++) {
+        dst.push({ ...src[i], qty: 0 });
+      }
+    });
+    localStorage.setItem(key, JSON.stringify(future));
+  });
+  alert('反映しました。');
+  initMonth(currentMonth); renderTabs(); renderPanel();
 }
 
 // ---- 並び替え ----
