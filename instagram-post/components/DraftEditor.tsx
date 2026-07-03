@@ -103,22 +103,24 @@ export default function DraftEditor({
 
       {hasDraft && !generating && (
         <div className="space-y-4">
-          <button
-            type="button"
-            onClick={onGenerate}
-            disabled={!canGenerate}
-            className="text-sm font-medium text-accent underline underline-offset-2 disabled:opacity-40"
-          >
-            この写真で作り直す
-          </button>
+          <div className="flex flex-col items-start gap-2">
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={!canGenerate}
+              className="text-sm font-medium text-accent underline underline-offset-2 disabled:opacity-40"
+            >
+              この写真で作り直す
+            </button>
 
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="inline-flex items-center gap-1 text-sm font-medium text-accent underline underline-offset-2"
-          >
-            {copied ? "コピーしました ✓" : "日本語・英語をコピー"}
-          </button>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="text-sm font-medium text-accent underline underline-offset-2"
+            >
+              {copied ? "コピーしました ✓" : "日本語・英語をコピー"}
+            </button>
+          </div>
 
           <div className="space-y-1">
             <label htmlFor="caption-ja" className="text-sm font-medium text-neutral-700">
