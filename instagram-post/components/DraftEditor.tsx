@@ -35,6 +35,8 @@ export default function DraftEditor({
   const [showEnglish, setShowEnglish] = useState(false);
   const [newTag, setNewTag] = useState("");
   const [copied, setCopied] = useState(false);
+  const [shortening, setShortening] = useState(false);
+  const [shortenError, setShortenError] = useState(false);
 
   const finalText = buildFinalText(captionJa, captionEn, hashtags);
   const isTruncated = finalText.length > FEED_PREVIEW_LIMIT;
@@ -47,6 +49,29 @@ export default function DraftEditor({
       setTimeout(() => setCopied(false), 1500);
     } catch {
       // クリップボードAPIが使えない環境ではボタンを無反応にするだけに留める
+    }
+  }
+
+  async function handleShorten() {
+    setShortening(true);
+    setShortenError(false);
+    try {
+      const res = await fetch("/api/shorten-caption", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ captionJa, captionEn }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setShortenError(true);
+        return;
+      }
+      onChangeCaptionJa(json.caption_ja);
+      onChangeCaptionEn(json.caption_en);
+    } catch {
+      setShortenError(true);
+    } finally {
+      setShortening(false);
     }
   }
 
@@ -119,7 +144,22 @@ export default function DraftEditor({
             >
               {copied ? "コピーしました ✓" : "投稿文をコピー（ハッシュタグ含む）"}
             </button>
+
+            <button
+              type="button"
+              onClick={handleShorten}
+              disabled={shortening}
+              className="text-sm font-medium text-accent underline underline-offset-2 disabled:opacity-40"
+            >
+              {shortening ? "短縮中..." : "キャプションを短くする"}
+            </button>
           </div>
+
+          {shortenError && (
+            <p role="alert" className="text-sm text-danger flex items-center gap-1">
+              ⚠ 短縮に失敗しました。もう一度お試しください。
+            </p>
+          )}
 
           <div className="space-y-1">
             <label htmlFor="caption-ja" className="text-sm font-medium text-neutral-700">
