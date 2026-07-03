@@ -41,9 +41,8 @@ export default function DraftEditor({
   const truncatedText = isTruncated ? `${finalText.slice(0, FEED_PREVIEW_LIMIT)}…` : finalText;
 
   async function handleCopy() {
-    const text = [captionJa.trim(), captionEn.trim()].filter(Boolean).join("\n\n");
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(finalText);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -118,7 +117,7 @@ export default function DraftEditor({
               onClick={handleCopy}
               className="text-sm font-medium text-accent underline underline-offset-2"
             >
-              {copied ? "コピーしました ✓" : "日本語・英語をコピー"}
+              {copied ? "コピーしました ✓" : "投稿文をコピー（ハッシュタグ含む）"}
             </button>
           </div>
 
