@@ -1714,6 +1714,10 @@ dz.addEventListener('drop', e => {
 // select()で全選択にして「打てば置き換わる」ネイティブな挙動に任せる
 function selAll(el) {
   el.dataset.prev = el.value;
+  // 即座に選択（キーボード操作や大半のブラウザではこれで十分）。
+  // マウスクリック時はブラウザがフォーカス後にカーソル位置を上書きすることがあるため、
+  // setTimeoutでの再選択も残して二重に保険をかける。
+  el.select();
   setTimeout(() => el.select(), 0);
 }
 // フォーカスが外れたとき、未入力なら元の値に戻す
@@ -1735,6 +1739,11 @@ document.getElementById('panel').addEventListener('keydown', e => {
   const next = document.querySelector(`[data-nav-row="${row + 1}"][data-nav-col="${col}"]`);
   if (next) {
     next.focus();
+    // onfocusのselAllはsetTimeoutで遅延実行されるため、Enter移動直後に
+    // 素早く入力すると全選択が間に合わず前の値に新しい値が連結されてしまう。
+    // ここで同期的に全選択しておき、その競合を防ぐ。
+    next.dataset.prev = next.value;
+    next.select();
   }
 });
 
