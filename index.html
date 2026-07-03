@@ -692,8 +692,10 @@ function renderPanel() {
   const taxLabel = TAX_RATE[cat] === 1.08 ? '8%' : '10%';
 
   const sorted = sortedItems(items);
-  const rows = sorted.map(({ item, i }) => {
+  const rows = sorted.map(({ item, i }, pos) => {
     const sub = item.price * item.qty;
+    // data-nav-rowは表示上の並び順(pos)。並び替え中でもEnterキーで見た目通り次の行へ移動できるようにする
+    // （元データのindex(i)を使うと、並び替えで表示順が変わった際に無関係な行へ飛んでしまう）
     return `<tr id="row-${i}">
       <td><input class="name-input" type="text" value="${escapeHtml(item.name)}" onfocus="selAll(this)" oninput="updateName('${cat}',${i},this.value)"><span class="print-name">${escapeHtml(item.name)}</span></td>
       <td class="muted">${escapeHtml(item.unit)}</td>
@@ -701,7 +703,7 @@ function renderPanel() {
         <input class="qty-input" type="text" inputmode="decimal" autocomplete="off"
           value="${item.priceEx}" onfocus="selAll(this)" oninput="updatePrice('${cat}',${i},this.value)"
           onblur="blurNum(this,'${cat}',${i},'price')"
-          data-nav-row="${i}" data-nav-col="price"
+          data-nav-row="${pos}" data-nav-col="price"
           style="width:90px;text-align:right">
         <small class="muted"> →¥${item.price.toLocaleString()}</small>
         <span class="print-val">¥${item.price.toLocaleString()}</span>
@@ -710,7 +712,7 @@ function renderPanel() {
         <input class="qty-input" type="text" inputmode="decimal" autocomplete="off"
           value="${item.qty}" onfocus="selAll(this)" oninput="updateQty('${cat}',${i},this.value)"
           onblur="blurNum(this,'${cat}',${i},'qty')"
-          data-nav-row="${i}" data-nav-col="qty">
+          data-nav-row="${pos}" data-nav-col="qty">
         <span class="print-val">${item.qty}</span>
       </td>
       <td class="right" id="sub-${i}">${sub>0 ? '¥'+Math.round(sub).toLocaleString() : '<span class="muted">—</span>'}</td>
