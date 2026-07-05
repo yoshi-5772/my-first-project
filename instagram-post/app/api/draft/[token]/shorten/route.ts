@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { shortenCaption } from "@/lib/caption";
+import { getPendingDraft } from "@/lib/pendingDraft";
 
 export const maxDuration = 30;
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  const draft = await getPendingDraft(token);
+  if (!draft) {
+    return NextResponse.json({ stage: "caption", error: "not_found" }, { status: 404 });
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    console.error("[shorten] ANTHROPIC_API_KEY is not set");
+    console.error("[draft-shorten] ANTHROPIC_API_KEY is not set");
     return NextResponse.json({ stage: "caption", error: "server_misconfigured" }, { status: 500 });
   }
 
@@ -24,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json(result);
   } catch (err) {
-    console.error("[shorten] request failed", err);
+    console.error("[draft-shorten] request failed", err);
     return NextResponse.json({ stage: "caption", error: "shorten_failed" }, { status: 502 });
   }
 }

@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import PhotoStep from "@/components/PhotoStep";
-import DraftEditor, { buildFinalText } from "@/components/DraftEditor";
+import DraftEditor from "@/components/DraftEditor";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { enhancePhoto, type EnhancedImage } from "@/lib/imageEnhance";
 import { loadDraft, saveDraft, clearDraft } from "@/lib/draft";
+import { buildFinalText } from "@/lib/postText";
 import { presentError, isFailureStage, type FailureStage } from "@/lib/errorMessages";
 
 export default function HomePage() {
@@ -120,6 +122,17 @@ export default function HomePage() {
     }
   }
 
+  async function handleShorten(currentCaptionJa: string, currentCaptionEn: string) {
+    const res = await fetch("/api/shorten-caption", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ captionJa: currentCaptionJa, captionEn: currentCaptionEn }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return { captionJa: json.caption_ja as string, captionEn: json.caption_en as string };
+  }
+
   const finalText = buildFinalText(captionJa, captionEn, hashtags);
   const canPublish = hasDraft && !!enhanced && captionJa.trim().length > 0;
 
@@ -154,7 +167,12 @@ export default function HomePage() {
   return (
     <main className="min-h-dvh bg-cream pb-32">
       <div className="max-w-md mx-auto px-4 pt-6 space-y-4">
-        <h1 className="text-lg font-bold px-1">Instagram投稿ツール</h1>
+        <div className="flex items-center justify-between px-1">
+          <h1 className="text-lg font-bold">Instagram投稿ツール</h1>
+          <Link href="/pool" className="text-sm font-medium text-accent underline underline-offset-2">
+            写真プールへ
+          </Link>
+        </div>
 
         <PhotoStep
           enhanced={enhanced}
@@ -173,6 +191,7 @@ export default function HomePage() {
           captionEn={captionEn}
           hashtags={hashtags}
           onGenerate={handleGenerate}
+          onShorten={handleShorten}
           onChangeCaptionJa={setCaptionJa}
           onChangeCaptionEn={setCaptionEn}
           onChangeHashtags={setHashtags}

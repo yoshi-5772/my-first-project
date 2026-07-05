@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { uploadPhoto } from "@/lib/photoUpload";
 
 export const maxDuration = 30;
 
@@ -11,12 +11,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const filename = `posts/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
-    const result = await put(filename, photo, {
-      access: "public",
-      contentType: "image/jpeg",
-    });
-    return NextResponse.json({ url: result.url });
+    const url = await uploadPhoto(photo);
+    return NextResponse.json({ url });
   } catch (err) {
     console.error("[upload] blob put failed", err);
     return NextResponse.json({ stage: "upload", error: "upload_failed" }, { status: 502 });
