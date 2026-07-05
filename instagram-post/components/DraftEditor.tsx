@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { presentError, type FailureStage } from "@/lib/errorMessages";
+import { buildFinalText } from "@/lib/postText";
 
 interface DraftEditorProps {
   canGenerate: boolean;
@@ -11,6 +12,7 @@ interface DraftEditorProps {
   captionEn: string;
   hashtags: string[];
   onGenerate: () => void;
+  onShorten: (captionJa: string, captionEn: string) => Promise<{ captionJa: string; captionEn: string } | null>;
   onChangeCaptionJa: (value: string) => void;
   onChangeCaptionEn: (value: string) => void;
   onChangeHashtags: (hashtags: string[]) => void;
@@ -27,6 +29,7 @@ export default function DraftEditor({
   captionEn,
   hashtags,
   onGenerate,
+  onShorten,
   onChangeCaptionJa,
   onChangeCaptionEn,
   onChangeHashtags,
@@ -56,18 +59,13 @@ export default function DraftEditor({
     setShortening(true);
     setShortenError(false);
     try {
-      const res = await fetch("/api/shorten-caption", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ captionJa, captionEn }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
+      const result = await onShorten(captionJa, captionEn);
+      if (!result) {
         setShortenError(true);
         return;
       }
-      onChangeCaptionJa(json.caption_ja);
-      onChangeCaptionEn(json.caption_en);
+      onChangeCaptionJa(result.captionJa);
+      onChangeCaptionEn(result.captionEn);
     } catch {
       setShortenError(true);
     } finally {
@@ -248,16 +246,4 @@ export default function DraftEditor({
       )}
     </section>
   );
-}
-
-const HASHTAG_SEPARATOR = ".\n.\n.";
-
-export function buildFinalText(captionJa: string, captionEn: string, hashtags: string[]): string {
-  const captionParts = [captionJa.trim(), captionEn.trim()].filter(Boolean);
-  const tagsText = hashtags.join(" ");
-  const sections = [...captionParts];
-  if (tagsText) {
-    sections.push(HASHTAG_SEPARATOR, tagsText);
-  }
-  return sections.join("\n\n");
 }

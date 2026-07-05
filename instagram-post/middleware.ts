@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { COOKIE_NAME, expectedAuthToken } from "@/lib/auth";
 
-// /api/refresh-tokenはVercel Cronから叩かれるため、Cookie認証の対象外にし
-// route.ts側でCRON_SECRETによる別方式の認証を行う
-const PUBLIC_PATHS = ["/login", "/api/login", "/api/refresh-token"];
+// /api/refresh-token, /api/auto-draftはVercel Cron等から叩かれるため、Cookie認証の対象外にし
+// route.ts側でCRON_SECRETによる別方式の認証を行う。
+// /draft, /api/draftはメール内の確認リンクからアクセスするため、Cookie認証の対象外にし
+// 推測困難なトークン自体を認証情報として扱う（route.ts側でトークンの存在を検証する）
+const PUBLIC_PATHS = ["/login", "/api/login", "/api/refresh-token", "/api/auto-draft", "/draft", "/api/draft"];
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],

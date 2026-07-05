@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/refresh-token", "schedule": "0 3 * * *" }
+    { "path": "/api/refresh-token", "schedule": "0 3 * * *" },
+    { "path": "/api/auto-draft", "schedule": "0 14 * * *" }
   ]
 }
