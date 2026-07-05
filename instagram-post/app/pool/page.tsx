@@ -15,6 +15,7 @@ export default function PoolPage() {
   const [processing, setProcessing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
 
@@ -77,6 +78,43 @@ export default function PoolPage() {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (file) handleFileSelected(file);
+  }
+
+  function handleLibraryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    if (files.length === 1) {
+      handleFileSelected(files[0]);
+      return;
+    }
+    handleBulkAdd(files);
+  }
+
+  async function handleBulkAdd(files: File[]) {
+    setAddError(null);
+    setBulkProgress({ done: 0, total: files.length });
+    let failedCount = 0;
+    for (const file of files) {
+      try {
+        const result = await enhancePhoto(file);
+        const form = new FormData();
+        form.append("photo", result.blob, "photo.jpg");
+        form.append("keyword", keyword);
+        const res = await fetch("/api/pool", { method: "POST", body: form });
+        if (!res.ok) throw new Error();
+        const json = await res.json();
+        setItems((prev) => [json.item, ...prev]);
+      } catch {
+        failedCount += 1;
+      }
+      setBulkProgress((prev) => (prev ? { ...prev, done: prev.done + 1 } : prev));
+    }
+    setBulkProgress(null);
+    setKeyword("");
+    if (failedCount > 0) {
+      setAddError(`${failedCount}枚の追加に失敗しました。もう一度お試しください。`);
+    }
   }
 
   async function handleAdd() {
@@ -148,7 +186,7 @@ export default function PoolPage() {
         <section className="bg-card rounded-2xl shadow-sm p-5 space-y-4">
           <h2 className="text-base font-bold">写真を追加</h2>
 
-          {!enhanced && !processing && (
+          {!enhanced && !processing && !bulkProgress && (
             <div className="space-y-2">
               <button
                 type="button"
@@ -162,8 +200,15 @@ export default function PoolPage() {
                 onClick={() => libraryInputRef.current?.click()}
                 className="w-full min-h-11 rounded-xl border border-neutral-300 text-neutral-700 font-medium py-3"
               >
-                アルバムから選ぶ
+                アルバムから選ぶ（複数選択可）
               </button>
+            </div>
+          )}
+
+          {bulkProgress && (
+            <div className="flex items-center gap-2 text-sm text-neutral-500 py-4" aria-live="polite">
+              <span className="inline-block h-4 w-4 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+              写真を追加しています（{bulkProgress.done}/{bulkProgress.total}）...
             </div>
           )}
 
@@ -227,7 +272,14 @@ export default function PoolPage() {
             className="hidden"
             onChange={handleChange}
           />
-          <input ref={libraryInputRef} type="file" accept="image/*" className="hidden" onChange={handleChange} />
+          <input
+            ref={libraryInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handleLibraryChange}
+          />
         </section>
 
         <section className="bg-card rounded-2xl shadow-sm p-5 space-y-3">
