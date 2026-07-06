@@ -27,6 +27,9 @@ export default function PoolPage() {
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [scheduleSaved, setScheduleSaved] = useState(false);
 
+  const [testRunning, setTestRunning] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+
   useEffect(() => {
     loadItems();
     loadSchedule();
@@ -173,6 +176,29 @@ export default function PoolPage() {
     }
   }
 
+  async function handleTestRun() {
+    setTestRunning(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/pool/test-draft", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        setTestResult("エラーが発生しました。時間をおいてもう一度お試しください。");
+        return;
+      }
+      if (json.skipped === "pool_empty") {
+        setTestResult("プールに写真がなかったため、スキップ通知メールを送信しました。");
+      } else {
+        setTestResult("下書きを作成し、メールを送信しました。届いているか確認してください。");
+        loadItems();
+      }
+    } catch {
+      setTestResult("エラーが発生しました。時間をおいてもう一度お試しください。");
+    } finally {
+      setTestRunning(false);
+    }
+  }
+
   return (
     <main className="min-h-dvh bg-cream pb-16">
       <div className="max-w-md mx-auto px-4 pt-6 space-y-4">
@@ -315,6 +341,18 @@ export default function PoolPage() {
             >
               {savingSchedule ? "保存中..." : scheduleSaved ? "保存しました ✓" : "保存"}
             </button>
+          </div>
+
+          <div className="pt-2 border-t border-neutral-100 space-y-2">
+            <button
+              type="button"
+              onClick={handleTestRun}
+              disabled={testRunning}
+              className="w-full min-h-11 rounded-xl border border-neutral-300 text-neutral-700 font-medium py-3 disabled:opacity-40"
+            >
+              {testRunning ? "実行中..." : "今すぐテスト実行（プールから1枚選んでメール送信）"}
+            </button>
+            {testResult && <p className="text-sm text-neutral-500">{testResult}</p>}
           </div>
         </section>
 

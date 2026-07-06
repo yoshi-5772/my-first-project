@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateCaption } from "@/lib/caption";
-import { sendAutoDraftFailedEmail, sendDraftReadyEmail, sendPoolEmptyEmail } from "@/lib/email";
-import { generateDraftToken, savePendingDraft, type PendingDraft } from "@/lib/pendingDraft";
-import { pickRandomPoolItem } from "@/lib/pool";
+import { runAutoDraftOnce } from "@/lib/runAutoDraft";
 import { getJstNow, getLastRunDate, getScheduleSettings, saveLastRunDate } from "@/lib/schedule";
 
 export const maxDuration = 60;
@@ -33,54 +30,6 @@ export async function GET(req: NextRequest) {
   // 同時実行での二重処理を避けるため、実処理の前に「今日実行済み」を記録する
   await saveLastRunDate(dateStr);
 
-  const picked = await pickRandomPoolItem();
-  if (!picked) {
-    await sendPoolEmptyEmail();
-    return NextResponse.json({ ok: true, skipped: "pool_empty" });
-  }
-
-  const token = generateDraftToken();
-  const reviewUrl = new URL(`/draft/${token}`, req.nextUrl.origin).toString();
-
-  const draft: PendingDraft = {
-    token,
-    photoUrl: picked.photoUrl,
-    keyword: picked.keyword,
-    captionJa: "",
-    captionEn: "",
-    hashtags: [],
-    status: "pending",
-    permalink: null,
-    createdAt: new Date().toISOString(),
-  };
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  const generated = apiKey ? await tryGenerateCaption(apiKey, picked.photoUrl, picked.keyword) : null;
-
-  if (generated) {
-    draft.captionJa = generated.caption_ja;
-    draft.captionEn = generated.caption_en;
-    draft.hashtags = generated.hashtags;
-    await savePendingDraft(draft);
-    await sendDraftReadyEmail(reviewUrl, draft.captionJa);
-  } else {
-    await savePendingDraft(draft);
-    await sendAutoDraftFailedEmail(reviewUrl);
-  }
-
-  return NextResponse.json({ ok: true, token });
-}
-
-async function tryGenerateCaption(apiKey: string, photoUrl: string, keyword: string) {
-  try {
-    const res = await fetch(photoUrl);
-    if (!res.ok) return null;
-    const arrayBuffer = await res.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
-    const mediaType = res.headers.get("content-type") || "image/jpeg";
-    return await generateCaption(apiKey, base64, mediaType, keyword);
-  } catch (err) {
-    console.error("[auto-draft] caption generation failed", err);
-    return null;
-  }
+  const result = await runAutoDraftOnce(req.nextUrl.origin);
+  return NextResponse.json(result);
 }
