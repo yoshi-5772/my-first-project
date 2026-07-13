@@ -14,7 +14,7 @@ const MAX_WIDTH = 1440;
 // Vercel Functionsのリクエストボディ上限（既定4.5MB）に対して十分な余裕を残すサイズ
 const MAX_BYTES = 3 * 1024 * 1024;
 // やりすぎ防止のため、補正の強さは固定の控えめな1プリセットのみ。調整UIは持たせない
-const ENHANCE_FILTER = "brightness(1.05) contrast(1.08) saturate(1.15)";
+const ENHANCE_FILTER = "brightness(1.08) contrast(1.12) saturate(1.25)";
 
 export async function enhancePhoto(file: File): Promise<EnhancedImage> {
   const img = await loadImage(file);
