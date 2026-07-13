@@ -10,6 +10,7 @@ interface PhotoStepProps {
   keyword: string;
   onKeywordChange: (keyword: string) => void;
   onFileSelected: (file: File) => void;
+  onReset: () => void;
 }
 
 export default function PhotoStep({
@@ -19,6 +20,7 @@ export default function PhotoStep({
   keyword,
   onKeywordChange,
   onFileSelected,
+  onReset,
 }: PhotoStepProps) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
@@ -90,7 +92,7 @@ export default function PhotoStep({
           </div>
           <button
             type="button"
-            onClick={() => cameraInputRef.current?.click()}
+            onClick={onReset}
             className="text-sm text-accent font-medium underline underline-offset-2"
           >
             別の写真を選び直す

@@ -181,6 +181,7 @@ export default function HomePage() {
           keyword={keyword}
           onKeywordChange={setKeyword}
           onFileSelected={handleFileSelected}
+          onReset={() => setEnhanced(null)}
         />
 
         <DraftEditor
