@@ -1127,6 +1127,25 @@ function migrateWineItem(cfg, item) {
   }
 }
 
+// 会話の中で個別に追加を頼まれた銘柄を、既存データに一度だけ差し込む
+// （ユーザーが後で削除しても再度追加されないよう、追加済みフラグをlocalStorageに残す）
+const ENSURE_ONCE_ITEMS = [
+  { id: 'prati-louis-m-martini', storeKey: 'bottle',
+    item: { name: 'PRATI by Louis M. Martini', origin: 'アメリカ', price: 0, color: '赤',
+      variety: 'カベルネ・ソーヴィニヨン',
+      feature: 'ソノマ・カウンティらしい、黒系果実の豊かな凝縮感と滑らかなタンニンが調和したカベルネ・ソーヴィニヨンです。' } }
+];
+
+function applyEnsureOnceItems() {
+  ENSURE_ONCE_ITEMS.forEach(({ id, storeKey, item }) => {
+    const flagKey = `winelist_ensured_${id}`;
+    if (localStorage.getItem(flagKey)) return;
+    const list = wineData[storeKey] || (wineData[storeKey] = []);
+    if (!list.some(x => x.name === item.name)) list.push({ ...item });
+    localStorage.setItem(flagKey, '1');
+  });
+}
+
 let wineData = {};
 function loadWineData() {
   let saved = null;
@@ -1138,9 +1157,11 @@ function loadWineData() {
       if (!wineData[cfg.storeKey]) wineData[cfg.storeKey] = [];
       wineData[cfg.storeKey].forEach(item => migrateWineItem(cfg, item));
     });
+    applyEnsureOnceItems();
     saveWineData();
   } else {
     wineData = JSON.parse(JSON.stringify(WINE_SEED_DATA));
+    applyEnsureOnceItems();
     saveWineData();
   }
 }
