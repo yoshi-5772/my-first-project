@@ -185,6 +185,27 @@
     .btn-gray { background: #e5e7eb; color: #374151; }
     .btn-gray:hover { background: #d1d5db; }
 
+    /* 納品書の一括取り込み */
+    .modal.wide { max-width: 900px; }
+    .bulk-progress { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+    .bulk-progress-bar { height: 100%; background: #2c7a4b; width: 0; transition: width .2s; }
+    .bulk-log { font-size: 0.78rem; color: #666; max-height: 120px; overflow-y: auto; margin-bottom: 12px; }
+    .bulk-log div { padding: 1px 0; }
+    .bulk-log .err { color: #b91c1c; }
+    .bulk-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 12px; }
+    .bulk-table th, .bulk-table td { border-bottom: 1px solid #eee; padding: 6px 8px; text-align: left; }
+    .bulk-table th { background: #f8f9fa; font-weight: 600; position: sticky; top: 0; }
+    .bulk-table td.num { text-align: right; }
+    .bulk-table .old { color: #999; }
+    .bulk-table .new { color: #1e5631; font-weight: 600; }
+    .bulk-table select, .bulk-table input { width: 100%; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.82rem; }
+    .bulk-table input.num { text-align: right; }
+    .bulk-wrap { max-height: 45vh; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; margin-bottom: 12px; }
+    .bulk-badge { display: inline-block; font-size: 0.72rem; padding: 1px 6px; border-radius: 10px; }
+    .bulk-badge.match { background: #dcfce7; color: #166534; }
+    .bulk-badge.newitem { background: #fef3c7; color: #92400e; }
+    .bulk-badge.same { background: #f1f5f9; color: #64748b; }
+
     .print-name { display: none; }
     .print-val { display: none; }
     .print-title { display: none; }
@@ -393,6 +414,35 @@
     <div class="modal-btns">
       <button class="btn btn-gray" onclick="closeOcr()">キャンセル</button>
       <button class="btn btn-green" onclick="addFromOcr()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 納品書の一括取り込みモーダル -->
+<div class="modal-bg" id="bulk-modal">
+  <div class="modal wide">
+    <h3>納品書から単価を一括更新</h3>
+    <div class="drop-zone" id="bulk-drop-zone" onclick="document.getElementById('bulk-input').click()">
+      <div id="bulk-drop-text">ここをタップして納品書の写真を選択<br><small>（フォルダ内を全選択でまとめて読み取れます・複数枚OK）</small></div>
+      <input type="file" id="bulk-input" accept="image/*" multiple style="display:none" onchange="startBulkImport(this)">
+    </div>
+    <div id="bulk-running" style="display:none">
+      <div class="bulk-progress"><div class="bulk-progress-bar" id="bulk-bar"></div></div>
+      <div style="font-size:0.85rem;color:#166534;margin-bottom:6px" id="bulk-status"></div>
+      <div class="bulk-log" id="bulk-log"></div>
+    </div>
+    <div id="bulk-review" style="display:none">
+      <p style="font-size:0.85rem;color:#666;margin-bottom:10px;">
+        読み取り結果です。<strong>反映する行だけチェック</strong>を入れてください。単価・対応する品目は修正できます。
+      </p>
+      <div class="bulk-wrap"><table class="bulk-table" id="bulk-table"></table></div>
+      <div style="font-size:0.8rem;color:#888;margin-bottom:12px;">
+        反映先: <strong id="bulk-target"></strong>（数量は変更されません）
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-gray" onclick="closeBulk()">閉じる</button>
+      <button class="btn btn-green" id="bulk-apply-btn" style="display:none" onclick="applyBulkImport()">チェックした行を反映</button>
     </div>
   </div>
 </div>
@@ -727,6 +777,7 @@ function renderPanel() {
         <h2>${cat} <span style="font-size:0.85rem;font-weight:400;color:#555;margin-left:12px">点数: <strong style="color:#1e5631">${totalQty.toLocaleString()}</strong> &nbsp; 小計: <strong style="color:#1e5631">¥${Math.round(totalAmt).toLocaleString()}</strong></span></h2>
         <div class="top-btns">
           <button class="btn btn-orange" onclick="openOcr()">写真から追加</button>
+          <button class="btn btn-green" onclick="openBulk()">納品書から単価更新</button>
           <button class="btn btn-blue" onclick="downloadCSV()">CSVダウンロード</button>
           <button class="btn btn-orange" onclick="window.print()">印刷</button>
         </div>
@@ -1665,6 +1716,262 @@ async function convertToKatakana(evt) {
     btn.textContent = original;
     btn.disabled = false;
   }
+}
+
+// ---- 納品書から単価を一括更新 ----
+// 既存の「写真から追加」はTesseract(OCR)だが、こちらはClaudeの画像認識に
+// 画像そのものを渡すため、日本語の納品書でも実用的な精度で読み取れる。
+const BULK_MODEL = 'claude-sonnet-5';
+const BULK_CONCURRENCY = 3;
+let bulkRows = [];
+
+function openBulk() {
+  if (!getAiApiKey()) { alert('先にヘッダーの「AI設定」からAPIキーを登録してください'); return; }
+  bulkRows = [];
+  document.getElementById('bulk-input').value = '';
+  document.getElementById('bulk-drop-zone').style.display = '';
+  document.getElementById('bulk-running').style.display = 'none';
+  document.getElementById('bulk-review').style.display = 'none';
+  document.getElementById('bulk-apply-btn').style.display = 'none';
+  document.getElementById('bulk-log').innerHTML = '';
+  document.getElementById('bulk-bar').style.width = '0';
+  document.getElementById('bulk-target').textContent = `${currentMonth} / ${activeTab}`;
+  document.getElementById('bulk-modal').classList.add('open');
+}
+
+function closeBulk() { document.getElementById('bulk-modal').classList.remove('open'); }
+
+function bulkLog(msg, isErr) {
+  const log = document.getElementById('bulk-log');
+  const div = document.createElement('div');
+  if (isErr) div.className = 'err';
+  div.textContent = msg;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+// 画像を長辺1600pxまで縮小してJPEGのbase64にする（APIの転送量と精度のバランス）
+function fileToResizedBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('read failed'));
+    reader.onload = e => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('decode failed'));
+      img.onload = () => {
+        const maxDim = 1600;
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.9).split(',')[1]);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function readDeliveryNote(file) {
+  const b64 = await fileToResizedBase64(file);
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': getAiApiKey(),
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: BULK_MODEL,
+      max_tokens: 2000,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+          { type: 'text', text: `これは飲食店の仕入納品書（または請求書・レシート）です。記載されている商品を読み取ってください。
+
+次のJSON配列だけを返してください。説明文やコードフェンスは付けないでください。
+[{"name":"商品名","unit":"単位","priceEx":税抜単価の数値,"taxIncluded":false}]
+
+ルール:
+- priceEx は「1単位あたりの単価」です。合計金額や数量ではありません。単価の記載がなく金額と数量しかない場合は 金額÷数量 で計算してください。
+- 納品書に記載の単価が税込だと判断できる場合のみ taxIncluded を true にし、priceEx にはその税込金額を入れてください。判断できなければ false にしてください。
+- unit は kg / 本 / 枚 / 個 などの単位。不明なら空文字にしてください。
+- 商品名は略号ではなく読み取れたままの表記で書いてください。
+- 読み取れない、または商品行が無い場合は [] を返してください。
+- 推測で数値を作らないでください。読み取れた行だけ返してください。` }
+        ]
+      }]
+    })
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  const json = await res.json();
+  let text = (json.content && json.content[0] && json.content[0].text || '').trim();
+  text = text.replace(/^```(?:json)?\s*/i, '').replace(/```$/, '').trim();
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start < 0 || end < 0) return [];
+  const arr = JSON.parse(text.slice(start, end + 1));
+  return Array.isArray(arr) ? arr : [];
+}
+
+// 表記ゆれを吸収して比較するための正規化（全角/半角・空白・記号を落とす）
+function normName(s) {
+  return String(s || '')
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[\s　・()（）\-ー_,、.]/g, '')
+    .toLowerCase();
+}
+
+// 納品書の商品名に最も近い既存品目のindexを返す（見つからなければ -1）
+function findItemIndex(cat, rawName) {
+  const items = data[cat] || [];
+  const target = normName(rawName);
+  if (!target) return -1;
+  let exact = items.findIndex(x => normName(x.name) === target);
+  if (exact >= 0) return exact;
+  // 部分一致（長い方が短い方を含む）
+  let best = -1, bestLen = 0;
+  items.forEach((x, i) => {
+    const n = normName(x.name);
+    if (!n) return;
+    if (n.includes(target) || target.includes(n)) {
+      const len = Math.min(n.length, target.length);
+      if (len > bestLen) { bestLen = len; best = i; }
+    }
+  });
+  // 1文字だけの一致は誤爆しやすいので採用しない
+  return bestLen >= 2 ? best : -1;
+}
+
+async function startBulkImport(input) {
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+  const cat = activeTab;
+  document.getElementById('bulk-drop-zone').style.display = 'none';
+  document.getElementById('bulk-running').style.display = '';
+  const bar = document.getElementById('bulk-bar');
+  const status = document.getElementById('bulk-status');
+
+  let done = 0;
+  const collected = [];
+  const update = () => {
+    bar.style.width = `${Math.round(done / files.length * 100)}%`;
+    status.textContent = `読み取り中... ${done}/${files.length}枚`;
+  };
+  update();
+
+  // 同時実行数を絞りつつ順に処理（レート制限対策）
+  let cursor = 0;
+  async function worker() {
+    while (cursor < files.length) {
+      const idx = cursor++;
+      const file = files[idx];
+      try {
+        const rows = await readDeliveryNote(file);
+        rows.forEach(r => {
+          const priceEx = Number(r.priceEx);
+          if (!r.name || !isFinite(priceEx) || priceEx <= 0) return;
+          // 税込で読み取れた場合は税抜に戻す
+          const ex = r.taxIncluded ? Math.round(priceEx / (TAX_RATE[cat] || 1.10)) : Math.round(priceEx);
+          collected.push({ name: String(r.name), unit: String(r.unit || ''), priceEx: ex, file: file.name });
+        });
+        bulkLog(`✓ ${file.name}: ${rows.length}件`);
+      } catch (e) {
+        bulkLog(`× ${file.name}: 読み取り失敗 (${e.message})`, true);
+      }
+      done++;
+      update();
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(BULK_CONCURRENCY, files.length) }, worker));
+
+  status.textContent = `読み取り完了: ${collected.length}件`;
+  if (!collected.length) {
+    bulkLog('商品を読み取れませんでした。写真の向きやピントを確認してください。', true);
+    return;
+  }
+
+  // 同じ商品が複数の納品書にあった場合は最後（＝より新しい納品書）の単価を採用
+  const byName = new Map();
+  collected.forEach(r => byName.set(normName(r.name), r));
+  bulkRows = Array.from(byName.values()).map(r => {
+    const idx = findItemIndex(cat, r.name);
+    const cur = idx >= 0 ? data[cat][idx].priceEx : null;
+    return { ...r, idx, cur, checked: idx >= 0 ? cur !== r.priceEx : false };
+  });
+  renderBulkReview(cat);
+}
+
+function renderBulkReview(cat) {
+  const items = data[cat] || [];
+  const opts = items.map((x, i) => `<option value="${i}">${escapeHtml(x.name)}</option>`).join('');
+  const rows = bulkRows.map((r, i) => {
+    let badge;
+    if (r.idx < 0) badge = '<span class="bulk-badge newitem">新規</span>';
+    else if (r.cur === r.priceEx) badge = '<span class="bulk-badge same">変更なし</span>';
+    else badge = '<span class="bulk-badge match">更新</span>';
+    return `<tr>
+      <td><input type="checkbox" ${r.checked ? 'checked' : ''} onchange="bulkRows[${i}].checked=this.checked"></td>
+      <td>${escapeHtml(r.name)}<div style="font-size:0.72rem;color:#aaa">${escapeHtml(r.file)}</div></td>
+      <td>
+        <select onchange="bulkSetTarget(${i},this.value,'${cat}')">
+          <option value="-1" ${r.idx < 0 ? 'selected' : ''}>＋新規追加</option>
+          ${opts.replace(`value="${r.idx}"`, `value="${r.idx}" selected`)}
+        </select>
+      </td>
+      <td class="num old">${r.cur != null ? r.cur.toLocaleString() : '—'}</td>
+      <td class="num"><input class="num" type="number" min="0" value="${r.priceEx}" onchange="bulkRows[${i}].priceEx=parseFloat(this.value)||0;renderBulkReview('${cat}')"></td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+  const allChecked = bulkRows.length > 0 && bulkRows.every(r => r.checked);
+  document.getElementById('bulk-table').innerHTML = `
+    <thead><tr>
+      <th style="width:34px"><input type="checkbox" ${allChecked ? 'checked' : ''} onchange="bulkToggleAll(this.checked,'${cat}')"></th>
+      <th>納品書の商品名</th><th style="width:200px">対応する品目</th>
+      <th class="num" style="width:80px">現在</th><th class="num" style="width:100px">新しい単価</th>
+      <th style="width:80px"></th>
+    </tr></thead><tbody>${rows}</tbody>`;
+  document.getElementById('bulk-review').style.display = '';
+  document.getElementById('bulk-apply-btn').style.display = '';
+}
+
+function bulkSetTarget(i, val, cat) {
+  const idx = parseInt(val);
+  bulkRows[i].idx = idx;
+  bulkRows[i].cur = idx >= 0 ? data[cat][idx].priceEx : null;
+  renderBulkReview(cat);
+}
+
+function bulkToggleAll(checked, cat) {
+  bulkRows.forEach(r => r.checked = checked);
+  renderBulkReview(cat);
+}
+
+function applyBulkImport() {
+  const cat = activeTab;
+  const targets = bulkRows.filter(r => r.checked);
+  if (!targets.length) { alert('反映する行にチェックを入れてください'); return; }
+  let updated = 0, added = 0;
+  targets.forEach(r => {
+    if (r.idx >= 0) {
+      const item = data[cat][r.idx];
+      item.priceEx = r.priceEx;
+      item.price = tin(r.priceEx, cat);
+      if (r.unit && !item.unit) item.unit = r.unit;
+      updated++;
+    } else {
+      data[cat].push({ name: r.name, unit: r.unit, priceEx: r.priceEx, price: tin(r.priceEx, cat), qty: 0 });
+      added++;
+    }
+  });
+  save();
+  renderPanel();
+  closeBulk();
+  alert(`単価を更新: ${updated}件\n新規追加: ${added}件（数量0）`);
 }
 
 // ---- バックアップ ----
