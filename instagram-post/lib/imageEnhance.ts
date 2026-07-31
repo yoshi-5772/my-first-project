@@ -14,7 +14,9 @@ const MAX_WIDTH = 1440;
 // Vercel Functionsのリクエストボディ上限（既定4.5MB）に対して十分な余裕を残すサイズ
 const MAX_BYTES = 3 * 1024 * 1024;
 // やりすぎ防止のため、補正の強さは固定の控えめな1プリセットのみ。調整UIは持たせない
-const ENHANCE_FILTER = "brightness(1.08) contrast(1.12) saturate(1.25)";
+const BRIGHTNESS = 1.08;
+const CONTRAST = 1.12;
+const SATURATION = 1.25;
 
 export async function enhancePhoto(file: File): Promise<EnhancedImage> {
   const img = await loadImage(file);
@@ -23,8 +25,9 @@ export async function enhancePhoto(file: File): Promise<EnhancedImage> {
   const width = Math.min(MAX_WIDTH, sw);
   const height = Math.round(width / TARGET_RATIO);
 
-  const beforeCanvas = drawToCanvas(img, sx, sy, sw, sh, width, height, null);
-  const afterCanvas = drawToCanvas(img, sx, sy, sw, sh, width, height, ENHANCE_FILTER);
+  const beforeCanvas = drawToCanvas(img, sx, sy, sw, sh, width, height);
+  const afterCanvas = drawToCanvas(img, sx, sy, sw, sh, width, height);
+  applyEnhancement(afterCanvas);
 
   const blob = await canvasToJpegUnderLimit(afterCanvas, MAX_BYTES);
 
@@ -71,16 +74,58 @@ function drawToCanvas(
   sh: number,
   width: number,
   height: number,
-  filter: string | null,
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("canvas_unsupported");
-  if (filter) ctx.filter = filter;
   ctx.drawImage(img, sx, sy, sw, sh, 0, 0, width, height);
   return canvas;
+}
+
+// 明るさ・コントラスト・彩度の補正をピクセル単位で自前計算する。
+// ctx.filterはiOS Safari 17未満では黙って無視され、加工が一切効かないため使わない
+function applyEnhancement(canvas: HTMLCanvasElement): void {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas_unsupported");
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    let r = data[i];
+    let g = data[i + 1];
+    let b = data[i + 2];
+
+    // brightness
+    r *= BRIGHTNESS;
+    g *= BRIGHTNESS;
+    b *= BRIGHTNESS;
+
+    // contrast（中間調128を軸に伸縮）
+    r = (r - 128) * CONTRAST + 128;
+    g = (g - 128) * CONTRAST + 128;
+    b = (b - 128) * CONTRAST + 128;
+
+    // saturation（輝度からの差を伸ばす。係数はCSS filterのsaturateと同じ）
+    const luma = 0.213 * r + 0.715 * g + 0.072 * b;
+    r = luma + (r - luma) * SATURATION;
+    g = luma + (g - luma) * SATURATION;
+    b = luma + (b - luma) * SATURATION;
+
+    data[i] = clamp255(r);
+    data[i + 1] = clamp255(g);
+    data[i + 2] = clamp255(b);
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function clamp255(value: number): number {
+  if (value < 0) return 0;
+  if (value > 255) return 255;
+  return value;
 }
 
 async function canvasToJpegUnderLimit(canvas: HTMLCanvasElement, maxBytes: number): Promise<Blob> {
