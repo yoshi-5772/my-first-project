@@ -185,6 +185,12 @@
     .btn-gray { background: #e5e7eb; color: #374151; }
     .btn-gray:hover { background: #d1d5db; }
 
+    .tax-select {
+      padding: 4px 2px; border: 1px solid #ccc; border-radius: 4px;
+      font-size: 0.82rem; color: #444; background: #fff;
+    }
+    .tax-select:focus { outline: none; border-color: #2c7a4b; }
+
     /* 納品書の一括取り込み */
     .modal.wide { max-width: 900px; }
     .bulk-progress { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
@@ -496,11 +502,26 @@
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
+// 部門ごとの既定税率。ただし軽減税率(8%)の対象は「酒類・外食を除く飲食料品」なので、
+// 酒/飲材のソフトドリンクは8%、調味料の料理酒・みりんは10%というように部門内で混在する。
+// そのため品目ごとに taxRate を持てるようにし、無い場合だけ部門の既定値を使う。
 const TAX_RATE = {
   '精肉': 1.08, '食材': 1.08, '調味料': 1.08,
   '酒/飲材': 1.10, '備品/包材': 1.10
 };
-const tin = (p, cat) => Math.round(p * (TAX_RATE[cat] || 1.10));
+// 「酒/飲材」の中で酒類ではない（＝8%）とわかっている品目
+const NON_ALCOHOL_NAMES = [
+  'プレミアムフリー', 'コーラ', 'ジンジャーエール', 'トニックウォーター', 'プレミアムソーダ',
+  '烏龍茶', 'アイスティー', 'アイスコーヒー', 'ウィルキンソン', 'ピーチシロップ'
+];
+const itemRate = (item, cat) => (item && item.taxRate) || TAX_RATE[cat] || 1.10;
+const tin = (p, cat, item) => Math.round(p * itemRate(item, cat));
+// 品目名から酒類でないと判断できる場合に8%を返す（判断できなければ部門の既定値）
+function guessRate(name, cat) {
+  if (cat !== '酒/飲材') return TAX_RATE[cat] || 1.10;
+  const n = normName(name);
+  return NON_ALCOHOL_NAMES.some(x => normName(x) === n) ? 1.08 : TAX_RATE[cat];
+}
 
 function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({
@@ -617,6 +638,15 @@ let currentMonth = ''; // 'YYYY-MM'
 
 function monthKey(ym) { return `inv_${ym}`; }
 
+// 古い保存データに priceEx / taxRate を補う。
+// taxRateが無い品目は品名から判定するため、酒/飲材のソフトドリンクが
+// 一律10%になっていた既存データも開いた時点で8%に直る。
+function migrateItem(x, cat) {
+  const priceEx = x.priceEx != null ? x.priceEx : Math.round(x.price / (TAX_RATE[cat] || 1.10));
+  const taxRate = x.taxRate || guessRate(x.name, cat);
+  return { ...x, priceEx, taxRate, price: Math.round(priceEx * taxRate) };
+}
+
 function initMonth(ym) {
   currentMonth = ym;
   document.getElementById('month-label').textContent =
@@ -624,32 +654,27 @@ function initMonth(ym) {
   const saved = localStorage.getItem(monthKey(ym));
   if (saved) {
     data = JSON.parse(saved);
-    // priceExがない古いデータをマイグレーション
+    // priceEx・taxRateがない古いデータをマイグレーション
     DATA_CATS.forEach(cat => {
-      data[cat] = (data[cat] || []).map(x => ({
-        ...x,
-        priceEx: x.priceEx != null ? x.priceEx : Math.round(x.price / (TAX_RATE[cat] || 1.10))
-      }));
+      data[cat] = (data[cat] || []).map(x => migrateItem(x, cat));
     });
     // 保存データが空（品目0件）の場合はRAWで再初期化
     const hasItems = DATA_CATS.some(cat => data[cat] && data[cat].length > 0);
-    if (hasItems) return;
+    if (hasItems) { save(); return; }
   }
   // 新しい月: 直近の保存済み月から品目・単価を引き継ぎ、数量だけ0にする
   const prev = latestSavedData();
   if (prev) {
     data = {};
     DATA_CATS.forEach(cat => {
-      data[cat] = (prev[cat] || []).map(x => ({
-        ...x,
-        priceEx: x.priceEx != null ? x.priceEx : Math.round(x.price / (TAX_RATE[cat] || 1.10))
-      }));
+      data[cat] = (prev[cat] || []).map(x => migrateItem(x, cat));
     });
   } else {
     DATA_CATS.forEach(cat => {
-      data[cat] = RAW[cat].map(([name, unit, priceEx, qty]) => ({
-        name, unit, priceEx, price: tin(priceEx, cat), qty
-      }));
+      data[cat] = RAW[cat].map(([name, unit, priceEx, qty]) => {
+        const taxRate = guessRate(name, cat);
+        return { name, unit, priceEx, price: Math.round(priceEx * taxRate), qty, taxRate };
+      });
     });
   }
   save();
@@ -760,6 +785,13 @@ function renderPanel() {
         <span class="print-val">¥${item.price.toLocaleString()}</span>
       </td>
       <td class="right">
+        <select class="tax-select" onchange="updateTaxRate('${cat}',${i},this.value)">
+          <option value="1.08" ${itemRate(item,cat) === 1.08 ? 'selected' : ''}>8%</option>
+          <option value="1.1" ${itemRate(item,cat) !== 1.08 ? 'selected' : ''}>10%</option>
+        </select>
+        <span class="print-val">${itemRate(item,cat) === 1.08 ? '8%' : '10%'}</span>
+      </td>
+      <td class="right">
         <input class="qty-input" type="text" inputmode="decimal" autocomplete="off"
           value="${item.qty}" onfocus="selAll(this)" oninput="updateQty('${cat}',${i},this.value)"
           onblur="blurNum(this,'${cat}',${i},'qty')"
@@ -801,7 +833,8 @@ function renderPanel() {
       <table>
         <thead><tr>
           <th>品名</th><th>単位</th>
-          <th class="right">単価（税抜入力→税込）<span class="tax-badge">${taxLabel}込</span></th>
+          <th class="right">単価（税抜入力→税込）<span class="tax-badge">既定${taxLabel}</span></th>
+          <th class="right">税率</th>
           <th class="right">数量</th>
           <th class="right">小計（税込）</th>
           <th></th>
@@ -848,8 +881,20 @@ function updateName(cat, i, val) {
 
 function updatePrice(cat, i, val) {
   const priceEx = parseFloat(val) || 0;
-  data[cat][i].priceEx = priceEx;
-  data[cat][i].price = tin(priceEx, cat);
+  const item = data[cat][i];
+  item.priceEx = priceEx;
+  item.price = tin(priceEx, cat, item);
+  save();
+  refreshRow(cat, i);
+  refreshSectionTotal(cat);
+  renderGrand();
+}
+
+// 品目ごとの税率を切り替える（酒類=10% / それ以外の飲食料品=8% など）
+function updateTaxRate(cat, i, val) {
+  const item = data[cat][i];
+  item.taxRate = parseFloat(val) === 1.08 ? 1.08 : 1.10;
+  item.price = tin(item.priceEx, cat, item);
   save();
   refreshRow(cat, i);
   refreshSectionTotal(cat);
@@ -885,7 +930,8 @@ function addItem() {
   const priceEx = parseFloat(document.getElementById('f-price').value);
   const qty = parseFloat(document.getElementById('f-qty').value) || 0;
   if (!name || isNaN(priceEx)) { alert('品名と単価を入力してください'); return; }
-  data[activeTab].push({ name, unit, priceEx, price: tin(priceEx, activeTab), qty });
+  const taxRate = guessRate(name, activeTab);
+  data[activeTab].push({ name, unit, priceEx, price: Math.round(priceEx * taxRate), qty, taxRate });
   save();
   document.getElementById('f-name').value = '';
   document.getElementById('f-price').value = '';
@@ -1043,7 +1089,8 @@ function addFromOcr() {
   const priceEx = parseFloat(document.getElementById('ocr-price').value);
   const qty = parseFloat(document.getElementById('ocr-qty').value) || 0;
   if (!name || isNaN(priceEx)) { alert('品名と単価を入力してください'); return; }
-  data[activeTab].push({ name, unit, priceEx, price: tin(priceEx, activeTab), qty });
+  const taxRate = guessRate(name, activeTab);
+  data[activeTab].push({ name, unit, priceEx, price: Math.round(priceEx * taxRate), qty, taxRate });
   save();
   closeOcr();
   renderPanel();
@@ -1853,9 +1900,12 @@ function findItemAnywhere(rawName) {
   return bestLen >= 2 ? best : null;
 }
 
-// 読み取った金額をそのカテゴリの税率で税抜に揃える
-function bulkPriceEx(row, cat) {
-  return row.taxIncluded ? Math.round(row.rawPrice / (TAX_RATE[cat] || 1.10)) : Math.round(row.rawPrice);
+// 読み取った金額を税抜に揃える。税率は照合先の品目のものを優先し、
+// 新規（照合先なし）なら品名から推定する
+function bulkPriceEx(row, cat, item) {
+  if (!row.taxIncluded) return Math.round(row.rawPrice);
+  const rate = item ? itemRate(item, cat) : guessRate(row.name, cat);
+  return Math.round(row.rawPrice / rate);
 }
 
 async function startBulkImport(input) {
@@ -1916,7 +1966,7 @@ async function startBulkImport(input) {
     const cat = hit ? hit.cat : (DATA_CATS.includes(activeTab) ? activeTab : DATA_CATS[0]);
     const idx = hit ? hit.idx : -1;
     const cur = hit ? data[cat][idx].priceEx : null;
-    const priceEx = bulkPriceEx(r, cat);
+    const priceEx = bulkPriceEx(r, cat, hit ? data[cat][idx] : null);
     return { ...r, cat, idx, cur, priceEx, checked: hit ? cur !== priceEx : false };
   });
   // 部門順→商品名順に並べて確認しやすくする
@@ -1980,7 +2030,7 @@ function bulkSetCat(i, cat) {
   const idx = items.findIndex(x => normName(x.name) === target);
   r.idx = idx;
   r.cur = idx >= 0 ? items[idx].priceEx : null;
-  r.priceEx = bulkPriceEx(r, cat);
+  r.priceEx = bulkPriceEx(r, cat, idx >= 0 ? items[idx] : null);
   renderBulkReview();
 }
 
@@ -2015,11 +2065,12 @@ function applyBulkImport() {
     if (r.idx >= 0) {
       const item = data[cat][r.idx];
       item.priceEx = r.priceEx;
-      item.price = tin(r.priceEx, cat);
+      item.price = tin(r.priceEx, cat, item);
       if (r.unit && !item.unit) item.unit = r.unit;
       updated++;
     } else {
-      data[cat].push({ name: r.name, unit: r.unit, priceEx: r.priceEx, price: tin(r.priceEx, cat), qty: 0 });
+      const taxRate = guessRate(r.name, cat);
+      data[cat].push({ name: r.name, unit: r.unit, priceEx: r.priceEx, price: Math.round(r.priceEx * taxRate), qty: 0, taxRate });
       added++;
     }
     perCat[cat] = (perCat[cat] || 0) + 1;
@@ -2095,7 +2146,8 @@ function syncItemsToFutureMonths() {
         dst[i].name = src[i].name;
         dst[i].unit = src[i].unit;
         dst[i].priceEx = src[i].priceEx;
-        dst[i].price = tin(src[i].priceEx, cat);
+        dst[i].taxRate = src[i].taxRate;
+        dst[i].price = tin(src[i].priceEx, cat, src[i]);
       }
       // 今月で追加された品目は数量0で追加
       for (let i = dst.length; i < src.length; i++) {
