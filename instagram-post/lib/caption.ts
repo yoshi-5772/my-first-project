@@ -81,7 +81,7 @@ interface StoreFact {
 const STORE_FACTS: StoreFact[] = [
   {
     appliesTo: "焼いたステーキ肉そのものが写っている写真のみ",
-    fact: "ステーキは炭火で焼いている",
+    fact: "ステーキは炭火で、何度も休ませながらじっくり焼き上げている",
   },
   {
     appliesTo: "茶色いデミグラスソースがかかった料理が写っている写真のみ",
@@ -89,7 +89,7 @@ const STORE_FACTS: StoreFact[] = [
   },
   {
     appliesTo: "焼いたステーキ肉そのものが写っている写真のみ",
-    fact: "ステーキには胡椒を4種類調合したものを使っている",
+    fact: "ステーキに使う胡椒は、黒・白・緑・ピンクの4種類をオリジナルブレンドしたもの",
   },
   {
     appliesTo: "煮込み料理が写っている写真のみ",
@@ -97,7 +97,7 @@ const STORE_FACTS: StoreFact[] = [
   },
   {
     appliesTo: "ステーキにソースがかかっている、またはソースが添えられている写真のみ",
-    fact: "ステーキソースは香味野菜と醤油ベースで、2週間ほど熟成させてから使用している",
+    fact: "ステーキソースは香味野菜・ワイン・醤油を使ったオリジナルで、2週間熟成させてから使用している",
   },
   {
     appliesTo: "サラダが写っている写真のみ",
@@ -116,6 +116,86 @@ const STORE_FACTS: StoreFact[] = [
     fact: "お弁当も承っている",
   },
 ];
+
+interface MeatTerm {
+  /** ひとことキーワード欄にこの語が含まれていたときだけ知識を渡す */
+  aliases: string[];
+  label: string;
+  description: string;
+}
+
+// 肉の部位・種別の知識。写真だけでは部位を正確に見分けられないため、
+// キーワード欄で部位が明示されたときにだけ渡し、AIの推測による誤情報を防ぐ
+const MEAT_KNOWLEDGE: MeatTerm[] = [
+  {
+    aliases: ["サーロイン", "sirloin"],
+    label: "サーロイン",
+    description:
+      "背中側の部位で「ステーキの王様」とも呼ばれる。赤身とサシのバランスがよく、濃厚な味わいととろけるような食感が持ち味",
+  },
+  {
+    aliases: ["ヒレ", "フィレ", "シャトーブリアン", "テンダーロイン", "fillet", "filet"],
+    label: "ヒレ",
+    description:
+      "運動量が極端に少ない部位のため、牛肉の中で最もやわらかい。脂が少なく上品な味わい。1頭から4〜5kgしか取れず、中心部のシャトーブリアンは600g前後とさらに希少",
+  },
+  {
+    aliases: ["ランプ"],
+    label: "ランプ",
+    description:
+      "腰からお尻にかけての大きな赤身。サシは入りにくいがキメが細かくやわらかく、旨味が強い。脂が少なくあっさりしていて、程よい噛み応えがある",
+  },
+  {
+    aliases: ["イチボ", "いちぼ"],
+    label: "イチボ",
+    description:
+      "お尻の先にあたる希少部位。赤身のしっかりした旨味と、ほどよく入った霜降りの甘みを併せ持つ。1頭からわずかしか取れない",
+  },
+  {
+    aliases: ["ミスジ", "みすじ"],
+    label: "ミスジ",
+    description:
+      "肩甲骨の内側にある希少部位。3本のスジが名前の由来。細かいサシが入り、濃厚な味わいとやわらかさが特徴",
+  },
+  {
+    aliases: ["赤身"],
+    label: "赤身",
+    description:
+      "脂に頼らず、噛むほどに肉そのものの旨味が広がるのが持ち味。脂が重くないので最後まで食べ飽きない",
+  },
+  {
+    aliases: ["はと肉", "ハト肉", "はとにく"],
+    label: "はと肉",
+    description:
+      "牛の前脚まわりから取れる超希少部位。当店では煮込み料理に使用している",
+  },
+  {
+    aliases: ["経産牛", "けいさん牛", "ケイサン牛", "けいさんぎゅう"],
+    label: "経産牛",
+    description:
+      "出産を経験した雌牛。年齢を重ねることで筋肉中のタンパク質が分解され、グルタミン酸やイノシン酸といった旨み成分が増えるため、噛むほどに広がる深い旨みとコクが魅力。脂の融点が低く、しつこさが少ない",
+  },
+  {
+    aliases: ["メス", "雌牛", "めす牛"],
+    label: "メス牛",
+    description:
+      "肉質のキメが細かく、サシが繊細に入る。不飽和脂肪酸が多く脂の融点が低いため、口の中でとろけるような口当たりになる",
+  },
+  {
+    aliases: ["オス", "去勢", "雄牛", "おす牛"],
+    label: "オス牛（去勢牛）",
+    description:
+      "去勢することで脂がのりやすくやわらかい肉質に育つ。メスより大きく育ち、赤身の力強さが持ち味",
+  },
+];
+
+function findMeatKnowledge(keyword: string): MeatTerm[] {
+  if (!keyword) return [];
+  const normalized = keyword.toLowerCase();
+  return MEAT_KNOWLEDGE.filter((term) =>
+    term.aliases.some((alias) => normalized.includes(alias.toLowerCase())),
+  );
+}
 
 // 毎回似た文章にならないよう、リクエストごとに書き口を1つ選んで指示する
 const WRITING_ANGLES = [
@@ -175,7 +255,18 @@ ${STORE_FACTS.map(({ appliesTo, fact }) => `- 【${appliesTo}】${fact}`).join("
   "hashtags": ["上記ルールに従ったハッシュタグをちょうど5個"]
 }`;
   if (!keyword) return base;
-  return `${base}\n\nキャプションには次の言葉やテーマを絡めてください: 「${keyword}」`;
+
+  let prompt = `${base}\n\nキャプションには次の言葉やテーマを絡めてください: 「${keyword}」`;
+
+  // キーワードで部位・種別が明示されたときだけ、その知識を渡す
+  const meatTerms = findMeatKnowledge(keyword);
+  if (meatTerms.length > 0) {
+    prompt += `\n\nキーワードで指定された肉の部位・種別についての知識（正確な情報なので、この範囲でなら
+言及してよい。ただし説明的になりすぎないよう、使うとしても魅力が伝わる一点に絞ること）:
+${meatTerms.map(({ label, description }) => `- ${label}: ${description}`).join("\n")}`;
+  }
+
+  return prompt;
 }
 
 function buildShortenPrompt(captionJa: string, captionEn: string): string {
