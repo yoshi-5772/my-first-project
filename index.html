@@ -436,10 +436,16 @@
       <label style="display:block;font-size:0.85rem;color:#444;margin-bottom:5px;">反映する範囲</label>
       <select id="sync-months" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:0.9rem"></select>
     </div>
-    <label style="display:flex;gap:8px;align-items:flex-start;font-size:0.85rem;color:#444;margin-bottom:16px;cursor:pointer">
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:0.85rem;color:#444;margin-bottom:10px;cursor:pointer">
       <input type="checkbox" id="sync-qty" style="margin-top:3px">
       <span>数量も含めて丸ごとコピーする<br>
         <small style="color:#b45309">対象月に入力済みの数量は上書きされます</small>
+      </span>
+    </label>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:0.85rem;color:#444;margin-bottom:16px;cursor:pointer">
+      <input type="checkbox" id="sync-prune" style="margin-top:3px">
+      <span>今月に無い品目を反映先から削除する<br>
+        <small style="color:#b45309">対象月にしか無い品目は反映されず残るため、合計が一致しません。完全に一致させたい場合のみチェック（削除する品目は確認画面に表示されます）</small>
       </span>
     </label>
     <div class="modal-btns">
@@ -2167,6 +2173,7 @@ function openSyncForward() {
     .map(n => `<option value="${n}" ${n === 3 ? 'selected' : ''}>${n}ヶ月先まで（${addMonths(currentMonth, 1)}〜${addMonths(currentMonth, n)}）</option>`)
     .join('');
   document.getElementById('sync-qty').checked = false;
+  document.getElementById('sync-prune').checked = false;
   document.getElementById('sync-source').textContent = currentMonth;
   document.getElementById('sync-modal').classList.add('open');
 }
@@ -2179,18 +2186,49 @@ function addMonths(ym, n) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// 反映先にしかない（今月に無い）品目を洗い出す。
+// 反映は今月の品目を1つずつ書き込む方式なので、これらは対象外となって
+// 元の数量のまま残り、今月との合計が一致しない原因になる。
+function findExtraItems(months) {
+  const extras = [];
+  months.forEach(m => {
+    const raw = localStorage.getItem(monthKey(m));
+    if (!raw) return;
+    const future = JSON.parse(raw);
+    DATA_CATS.forEach(cat => {
+      const srcIds = new Set((data[cat] || []).map(x => x.id));
+      const srcNames = new Set((data[cat] || []).map(x => normName(x.name)));
+      (future[cat] || []).forEach(x => {
+        if (!srcIds.has(x.id) && !srcNames.has(normName(x.name))) {
+          extras.push({ month: m, cat, name: x.name, qty: x.qty });
+        }
+      });
+    });
+  });
+  return extras;
+}
+
 function runSyncForward() {
   const n = parseInt(document.getElementById('sync-months').value) || 1;
   const withQty = document.getElementById('sync-qty').checked;
+  const prune = document.getElementById('sync-prune').checked;
   const months = Array.from({ length: n }, (_, i) => addMonths(currentMonth, i + 1));
   const existing = months.filter(m => localStorage.getItem(monthKey(m)));
 
+  const extras = findExtraItems(months);
   const qtyNote = withQty
     ? `\n\n※数量も丸ごとコピーします。${existing.length ? `作成済みの月（${existing.join(', ')}）に入力済みの数量は上書きされます。` : ''}`
     : '\n\n※数量は変更しません（未作成の月は0で作成）。';
-  if (!confirm(`${currentMonth}の内容を次の月へ反映します。\n${months.join(', ')}\n\n作成済み: ${existing.length}ヶ月 / 新規作成: ${months.length - existing.length}ヶ月${qtyNote}\n\nよろしいですか？`)) return;
+  let extraNote = '';
+  if (extras.length) {
+    const list = extras.slice(0, 10).map(e => `・${e.month} ${e.cat}「${e.name}」数量${e.qty}`).join('\n');
+    extraNote = prune
+      ? `\n\n【削除】${currentMonth}に無い品目${extras.length}件を反映先から削除します:\n${list}${extras.length > 10 ? `\n…ほか${extras.length - 10}件` : ''}`
+      : `\n\n【注意】${currentMonth}に無い品目が反映先に${extras.length}件あります。これらは対象外なので残り、${currentMonth}と合計が一致しません:\n${list}${extras.length > 10 ? `\n…ほか${extras.length - 10}件` : ''}`;
+  }
+  if (!confirm(`${currentMonth}の内容を次の月へ反映します。\n${months.join(', ')}\n\n作成済み: ${existing.length}ヶ月 / 新規作成: ${months.length - existing.length}ヶ月${qtyNote}${extraNote}\n\nよろしいですか？`)) return;
 
-  let updated = 0, added = 0, created = 0;
+  let updated = 0, added = 0, created = 0, removed = 0;
   months.forEach(m => {
     const key = monthKey(m);
     const raw = localStorage.getItem(key);
@@ -2212,14 +2250,17 @@ function runSyncForward() {
       // IDで突き合わせる。IDが無い古いデータのために品名でも引けるようにする
       const byId = new Map(dst.map((x, i) => [x.id, i]));
       const byName = new Map(dst.map((x, i) => [normName(x.name), i]));
+      const matched = new Set();
       src.forEach(s => {
         let i = byId.has(s.id) ? byId.get(s.id) : undefined;
         if (i === undefined && byName.has(normName(s.name))) i = byName.get(normName(s.name));
         if (i === undefined) {
           dst.push({ ...s, qty: withQty ? s.qty : 0 });
+          matched.add(dst.length - 1); // 今追加した品目も残す対象
           added++;
           return;
         }
+        matched.add(i);
         dst[i].id = s.id;
         dst[i].name = s.name;
         dst[i].unit = s.unit;
@@ -2229,11 +2270,18 @@ function runSyncForward() {
         if (withQty) dst[i].qty = s.qty;
         updated++;
       });
+      // 今月に無い品目は対象外なので元の数量のまま残る。完全に一致させたい
+      // 場合のみ削除する（既定では残す）
+      if (prune) {
+        const kept = dst.filter((x, i) => matched.has(i));
+        removed += dst.length - kept.length;
+        future[cat] = kept;
+      }
     });
     localStorage.setItem(key, JSON.stringify(future));
   });
   closeSyncForward();
-  alert(`反映しました。\n新規作成: ${created}ヶ月 / 更新: ${months.length - created}ヶ月\n品目 更新${updated}件・追加${added}件`);
+  alert(`反映しました。\n新規作成: ${created}ヶ月 / 更新: ${months.length - created}ヶ月\n品目 更新${updated}件・追加${added}件${removed ? `・削除${removed}件` : ''}`);
   initMonth(currentMonth); renderTabs(); renderPanel();
 }
 
