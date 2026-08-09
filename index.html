@@ -638,13 +638,19 @@ let currentMonth = ''; // 'YYYY-MM'
 
 function monthKey(ym) { return `inv_${ym}`; }
 
-// 古い保存データに priceEx / taxRate を補う。
+// 品目を月をまたいで対応付けるための安定したID。
+// 配列の位置で対応付けると、片方の月で品目を削除・並べ替えした時に
+// 別の商品へ名前や単価を書き込んでしまうため、IDで突き合わせる。
+let itemIdSeq = Date.now();
+function newItemId() { return `it_${(itemIdSeq++).toString(36)}`; }
+
+// 古い保存データに priceEx / taxRate / id を補う。
 // taxRateが無い品目は品名から判定するため、酒/飲材のソフトドリンクが
 // 一律10%になっていた既存データも開いた時点で8%に直る。
 function migrateItem(x, cat) {
   const priceEx = x.priceEx != null ? x.priceEx : Math.round(x.price / (TAX_RATE[cat] || 1.10));
   const taxRate = x.taxRate || guessRate(x.name, cat);
-  return { ...x, priceEx, taxRate, price: Math.round(priceEx * taxRate) };
+  return { ...x, id: x.id || newItemId(), priceEx, taxRate, price: Math.round(priceEx * taxRate) };
 }
 
 function initMonth(ym) {
@@ -662,18 +668,18 @@ function initMonth(ym) {
     const hasItems = DATA_CATS.some(cat => data[cat] && data[cat].length > 0);
     if (hasItems) { save(); return; }
   }
-  // 新しい月: 直近の保存済み月から品目・単価を引き継ぎ、数量だけ0にする
-  const prev = latestSavedData();
+  // 新しい月: 直前の保存済み月から品目・単価を引き継ぎ、数量だけ0にする
+  const prev = latestSavedDataBefore(ym);
   if (prev) {
     data = {};
     DATA_CATS.forEach(cat => {
-      data[cat] = (prev[cat] || []).map(x => migrateItem(x, cat));
+      data[cat] = (prev[cat] || []).map(x => ({ ...migrateItem(x, cat), qty: 0 }));
     });
   } else {
     DATA_CATS.forEach(cat => {
       data[cat] = RAW[cat].map(([name, unit, priceEx, qty]) => {
         const taxRate = guessRate(name, cat);
-        return { name, unit, priceEx, price: Math.round(priceEx * taxRate), qty, taxRate };
+        return { id: newItemId(), name, unit, priceEx, price: Math.round(priceEx * taxRate), qty, taxRate };
       });
     });
   }
@@ -682,9 +688,13 @@ function initMonth(ym) {
 
 function save() { localStorage.setItem(monthKey(currentMonth), JSON.stringify(data)); }
 
-function latestSavedData() {
+// ymより前で最も新しい保存済み月のデータを返す。
+// 単純に最新の月を取ると、8月まで入力済みの状態で7月を開いた時に
+// 未来である8月の内容を引き継いでしまうため、ymより前に限定する。
+function latestSavedDataBefore(ym) {
   const keys = Object.keys(localStorage)
-    .filter(k => k.startsWith('inv_'))
+    .filter(k => k.startsWith('inv_') && !k.startsWith('inv_autobk_'))
+    .filter(k => k.slice(4) < ym)
     .sort().reverse();
   if (!keys.length) return null;
   try { return JSON.parse(localStorage.getItem(keys[0])); } catch { return null; }
@@ -931,7 +941,7 @@ function addItem() {
   const qty = parseFloat(document.getElementById('f-qty').value) || 0;
   if (!name || isNaN(priceEx)) { alert('品名と単価を入力してください'); return; }
   const taxRate = guessRate(name, activeTab);
-  data[activeTab].push({ name, unit, priceEx, price: Math.round(priceEx * taxRate), qty, taxRate });
+  data[activeTab].push({ id: newItemId(), name, unit, priceEx, price: Math.round(priceEx * taxRate), qty, taxRate });
   save();
   document.getElementById('f-name').value = '';
   document.getElementById('f-price').value = '';
@@ -1090,7 +1100,7 @@ function addFromOcr() {
   const qty = parseFloat(document.getElementById('ocr-qty').value) || 0;
   if (!name || isNaN(priceEx)) { alert('品名と単価を入力してください'); return; }
   const taxRate = guessRate(name, activeTab);
-  data[activeTab].push({ name, unit, priceEx, price: Math.round(priceEx * taxRate), qty, taxRate });
+  data[activeTab].push({ id: newItemId(), name, unit, priceEx, price: Math.round(priceEx * taxRate), qty, taxRate });
   save();
   closeOcr();
   renderPanel();
@@ -2070,7 +2080,7 @@ function applyBulkImport() {
       updated++;
     } else {
       const taxRate = guessRate(r.name, cat);
-      data[cat].push({ name: r.name, unit: r.unit, priceEx: r.priceEx, price: Math.round(r.priceEx * taxRate), qty: 0, taxRate });
+      data[cat].push({ id: newItemId(), name: r.name, unit: r.unit, priceEx: r.priceEx, price: Math.round(r.priceEx * taxRate), qty: 0, taxRate });
       added++;
     }
     perCat[cat] = (perCat[cat] || 0) + 1;
@@ -2136,27 +2146,38 @@ function syncItemsToFutureMonths() {
   }
   if (!confirm(`${currentMonth}の品名・単位・単価を、次の${futureKeys.length}ヶ月分に反映します（数量はそのまま残ります）。\n${futureKeys.map(k => k.slice(4)).join(', ')}\n\nよろしいですか？`)) return;
 
+  let updated = 0, added = 0;
   futureKeys.forEach(key => {
     const future = JSON.parse(localStorage.getItem(key));
     DATA_CATS.forEach(cat => {
       const src = data[cat] || [];
-      const dst = future[cat] || (future[cat] = []);
-      const n = Math.min(src.length, dst.length);
-      for (let i = 0; i < n; i++) {
-        dst[i].name = src[i].name;
-        dst[i].unit = src[i].unit;
-        dst[i].priceEx = src[i].priceEx;
-        dst[i].taxRate = src[i].taxRate;
-        dst[i].price = tin(src[i].priceEx, cat, src[i]);
-      }
-      // 今月で追加された品目は数量0で追加
-      for (let i = dst.length; i < src.length; i++) {
-        dst.push({ ...src[i], qty: 0 });
-      }
+      const dst = (future[cat] || (future[cat] = [])).map(x => migrateItem(x, cat));
+      future[cat] = dst;
+      // IDで突き合わせる。IDが無い古いデータのために品名でも引けるようにする
+      const byId = new Map(dst.map((x, i) => [x.id, i]));
+      const byName = new Map(dst.map((x, i) => [normName(x.name), i]));
+      src.forEach(s => {
+        let i = byId.has(s.id) ? byId.get(s.id) : undefined;
+        if (i === undefined && byName.has(normName(s.name))) i = byName.get(normName(s.name));
+        if (i === undefined) {
+          // 今月で追加された品目は数量0で追加
+          dst.push({ ...s, qty: 0 });
+          added++;
+          return;
+        }
+        // 数量は触らない
+        dst[i].id = s.id;
+        dst[i].name = s.name;
+        dst[i].unit = s.unit;
+        dst[i].priceEx = s.priceEx;
+        dst[i].taxRate = s.taxRate;
+        dst[i].price = tin(s.priceEx, cat, s);
+        updated++;
+      });
     });
     localStorage.setItem(key, JSON.stringify(future));
   });
-  alert('反映しました。');
+  alert(`反映しました。\n${futureKeys.length}ヶ月分 / 更新${updated}件・追加${added}件`);
   initMonth(currentMonth); renderTabs(); renderPanel();
 }
 
