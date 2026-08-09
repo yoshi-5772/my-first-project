@@ -358,7 +358,7 @@
     <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px" onclick="changeMonth(-1)">◀</button>
     <span id="month-label" style="font-size:1rem;font-weight:600;min-width:90px;text-align:center"></span>
     <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;padding:5px 10px" onclick="changeMonth(1)">▶</button>
-    <button class="btn" style="background:rgba(255,255,255,0.2);color:#fff;padding:5px 10px;font-size:0.8rem" onclick="syncItemsToFutureMonths()">↻ 品目を今後へ反映</button>
+    <button class="btn" style="background:rgba(255,255,255,0.2);color:#fff;padding:5px 10px;font-size:0.8rem" onclick="openSyncForward()">↻ 品目を今後へ反映</button>
     <button class="btn" style="background:rgba(255,255,255,0.2);color:#fff;padding:5px 10px;font-size:0.8rem" onclick="exportBackup()">💾 バックアップ</button>
     <label class="btn" style="background:rgba(255,255,255,0.12);color:#fff;padding:5px 10px;font-size:0.8rem;cursor:pointer">
       📂 復元<input type="file" accept=".json" style="display:none" onchange="importBackup(this)">
@@ -420,6 +420,31 @@
     <div class="modal-btns">
       <button class="btn btn-gray" onclick="closeOcr()">キャンセル</button>
       <button class="btn btn-green" onclick="addFromOcr()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 今後の月へ反映モーダル -->
+<div class="modal-bg" id="sync-modal">
+  <div class="modal">
+    <h3>品目を今後の月へ反映</h3>
+    <p style="font-size:0.88rem;color:#555;margin-bottom:14px;">
+      <strong id="sync-source"></strong> の品名・単位・単価・税率を、この先の月へ反映します。<br>
+      <small style="color:#888">まだ開いていない月は新しく作成します。</small>
+    </p>
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:0.85rem;color:#444;margin-bottom:5px;">反映する範囲</label>
+      <select id="sync-months" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:0.9rem"></select>
+    </div>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:0.85rem;color:#444;margin-bottom:16px;cursor:pointer">
+      <input type="checkbox" id="sync-qty" style="margin-top:3px">
+      <span>数量も含めて丸ごとコピーする<br>
+        <small style="color:#b45309">対象月に入力済みの数量は上書きされます</small>
+      </span>
+    </label>
+    <div class="modal-btns">
+      <button class="btn btn-gray" onclick="closeSyncForward()">キャンセル</button>
+      <button class="btn btn-green" onclick="runSyncForward()">反映する</button>
     </div>
   </div>
 </div>
@@ -2134,21 +2159,52 @@ function importBackup(input) {
   input.value = '';
 }
 
-// 今表示中の月の品名・単位・単価を、すでに保存済みの未来の月へ反映する（数量は変更しない）
-function syncItemsToFutureMonths() {
-  const futureKeys = Object.keys(localStorage)
-    .filter(k => k.startsWith('inv_') && !k.startsWith('inv_autobk_') && k !== monthKey(currentMonth))
-    .filter(k => k.slice(4) > currentMonth)
-    .sort();
-  if (!futureKeys.length) {
-    alert(`${currentMonth}より後の月にはまだ保存済みデータがありません。\n新しい月を開けば自動的に品名・単価が引き継がれます。`);
-    return;
-  }
-  if (!confirm(`${currentMonth}の品名・単位・単価を、次の${futureKeys.length}ヶ月分に反映します（数量はそのまま残ります）。\n${futureKeys.map(k => k.slice(4)).join(', ')}\n\nよろしいですか？`)) return;
+// 今表示中の月の内容を、この先の月へ反映する。
+// 未作成の月は新しく作り、作成済みの月は品目を突き合わせて更新する。
+function openSyncForward() {
+  const sel = document.getElementById('sync-months');
+  sel.innerHTML = Array.from({ length: 12 }, (_, i) => i + 1)
+    .map(n => `<option value="${n}" ${n === 3 ? 'selected' : ''}>${n}ヶ月先まで（${addMonths(currentMonth, 1)}〜${addMonths(currentMonth, n)}）</option>`)
+    .join('');
+  document.getElementById('sync-qty').checked = false;
+  document.getElementById('sync-source').textContent = currentMonth;
+  document.getElementById('sync-modal').classList.add('open');
+}
 
-  let updated = 0, added = 0;
-  futureKeys.forEach(key => {
-    const future = JSON.parse(localStorage.getItem(key));
+function closeSyncForward() { document.getElementById('sync-modal').classList.remove('open'); }
+
+function addMonths(ym, n) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function runSyncForward() {
+  const n = parseInt(document.getElementById('sync-months').value) || 1;
+  const withQty = document.getElementById('sync-qty').checked;
+  const months = Array.from({ length: n }, (_, i) => addMonths(currentMonth, i + 1));
+  const existing = months.filter(m => localStorage.getItem(monthKey(m)));
+
+  const qtyNote = withQty
+    ? `\n\n※数量も丸ごとコピーします。${existing.length ? `作成済みの月（${existing.join(', ')}）に入力済みの数量は上書きされます。` : ''}`
+    : '\n\n※数量は変更しません（未作成の月は0で作成）。';
+  if (!confirm(`${currentMonth}の内容を次の月へ反映します。\n${months.join(', ')}\n\n作成済み: ${existing.length}ヶ月 / 新規作成: ${months.length - existing.length}ヶ月${qtyNote}\n\nよろしいですか？`)) return;
+
+  let updated = 0, added = 0, created = 0;
+  months.forEach(m => {
+    const key = monthKey(m);
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      // 未作成の月は今月の内容をそのまま複製して作る
+      const fresh = {};
+      DATA_CATS.forEach(cat => {
+        fresh[cat] = (data[cat] || []).map(x => ({ ...x, qty: withQty ? x.qty : 0 }));
+      });
+      localStorage.setItem(key, JSON.stringify(fresh));
+      created++;
+      return;
+    }
+    const future = JSON.parse(raw);
     DATA_CATS.forEach(cat => {
       const src = data[cat] || [];
       const dst = (future[cat] || (future[cat] = [])).map(x => migrateItem(x, cat));
@@ -2160,24 +2216,24 @@ function syncItemsToFutureMonths() {
         let i = byId.has(s.id) ? byId.get(s.id) : undefined;
         if (i === undefined && byName.has(normName(s.name))) i = byName.get(normName(s.name));
         if (i === undefined) {
-          // 今月で追加された品目は数量0で追加
-          dst.push({ ...s, qty: 0 });
+          dst.push({ ...s, qty: withQty ? s.qty : 0 });
           added++;
           return;
         }
-        // 数量は触らない
         dst[i].id = s.id;
         dst[i].name = s.name;
         dst[i].unit = s.unit;
         dst[i].priceEx = s.priceEx;
         dst[i].taxRate = s.taxRate;
         dst[i].price = tin(s.priceEx, cat, s);
+        if (withQty) dst[i].qty = s.qty;
         updated++;
       });
     });
     localStorage.setItem(key, JSON.stringify(future));
   });
-  alert(`反映しました。\n${futureKeys.length}ヶ月分 / 更新${updated}件・追加${added}件`);
+  closeSyncForward();
+  alert(`反映しました。\n新規作成: ${created}ヶ月 / 更新: ${months.length - created}ヶ月\n品目 更新${updated}件・追加${added}件`);
   initMonth(currentMonth); renderTabs(); renderPanel();
 }
 
