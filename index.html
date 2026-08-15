@@ -218,16 +218,16 @@
     #print-combined { display: none; }
     #print-combined .menu-print {
       font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-      max-width: 820px;
+      max-width: 960px;
       margin: 0 auto;
       color: #2a2a2a;
       position: relative;
       border: 1px solid #c9a86a;
-      padding: 40px 48px 34px;
+      padding: 40px 32px 34px;
     }
     #print-combined .menu-print.menu-print-wide {
-      max-width: 780px;
-      padding: 40px 40px 34px;
+      max-width: 960px;
+      padding: 40px 30px 34px;
     }
     #print-combined .menu-print-wide h1 { font-size: 2.3rem; }
     #print-combined .menu-print-wide h2 { font-size: 1.2rem; }
@@ -328,7 +328,7 @@
       margin-top: 5px;
       line-height: 1.7;
     }
-    @page { margin: 1cm; size: auto; }
+    @page { margin: 0.6cm; size: auto; }
     @media print {
       header, .tabs, .form-row, .top-btns, .btn, .btn-del, .modal-bg { display: none !important; }
       small { display: none !important; }
@@ -344,7 +344,7 @@
       body.print-mode-combined { background: #fff !important; }
       body.print-mode-combined #print-combined {
         display: flex !important; flex-direction: column; justify-content: center;
-        min-height: 100vh; padding: 0 14px; box-sizing: border-box;
+        min-height: 100vh; padding: 0 6px; box-sizing: border-box;
       }
       body.print-mode-combined #print-combined .menu-print { width: 100%; }
     }
@@ -1533,11 +1533,11 @@ function fitPrintToOnePage(wide) {
   container.style.visibility = 'hidden';
   container.style.left = '-9999px';
   // 実際の印刷幅（A4縦向きの用紙内に収まる幅）に合わせて計測し、高さのずれを防ぐ
-  container.style.width = wide ? '780px' : '760px';
+  container.style.width = '748px';
 
   const mmToPx = 96 / 25.4;
-  // A4縦 - 上下1cmずつのページ余白。環境によるレンダリング誤差を見込んで少し余裕を持たせる
-  const pageHeightPx = (297 - 20) * mmToPx * 0.92;
+  // A4縦 - 上下0.6cmずつのページ余白。環境によるレンダリング誤差を見込んで少し余裕を持たせる
+  const pageHeightPx = (297 - 12) * mmToPx * 0.92;
   const contentHeight = menu.scrollHeight;
   if (contentHeight > pageHeightPx) {
     const scale = Math.max(0.4, pageHeightPx / contentHeight);
