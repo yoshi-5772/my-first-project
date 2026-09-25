@@ -463,6 +463,18 @@
       <div id="bulk-drop-text">ここをタップして納品書の写真を選択<br><small>（フォルダ内を全選択でまとめて読み取れます・複数枚OK）</small></div>
       <input type="file" id="bulk-input" accept="image/*" multiple style="display:none" onchange="startBulkImport(this)">
     </div>
+    <div id="bulk-paste">
+      <div style="display:flex;align-items:center;gap:10px;margin:0 0 10px;color:#999;font-size:0.8rem">
+        <span style="flex:1;height:1px;background:#e5e7eb"></span>または<span style="flex:1;height:1px;background:#e5e7eb"></span>
+      </div>
+      <p style="font-size:0.82rem;color:#666;margin-bottom:6px;">
+        品名と単価を貼り付けて取り込む（APIキー不要）<br>
+        <small style="color:#888">1行に1品目。「品名, 単位, 税抜単価」または「品名, 税抜単価」。カンマかタブ区切り</small>
+      </p>
+      <textarea id="bulk-text" rows="5" placeholder="フィンカ・ソブレーニョ・クリアンサ, 本, 2970&#10;ハミルトン・リトル・ロード・シラーズ, 本, 2400"
+        style="width:100%;box-sizing:border-box;padding:8px;border:1px solid #ccc;border-radius:5px;font-size:0.85rem;font-family:inherit;margin-bottom:8px"></textarea>
+      <button class="btn btn-green" style="width:100%" onclick="startBulkFromText()">貼り付けた内容を取り込む</button>
+    </div>
     <div id="bulk-running" style="display:none">
       <div class="bulk-progress"><div class="bulk-progress-bar" id="bulk-bar"></div></div>
       <div style="font-size:0.85rem;color:#166534;margin-bottom:6px" id="bulk-status"></div>
@@ -1814,9 +1826,10 @@ const BULK_CONCURRENCY = 3;
 let bulkRows = [];
 
 function openBulk() {
-  if (!getAiApiKey()) { alert('先にヘッダーの「AI設定」からAPIキーを登録してください'); return; }
   bulkRows = [];
   document.getElementById('bulk-input').value = '';
+  document.getElementById('bulk-text').value = '';
+  document.getElementById('bulk-paste').style.display = '';
   document.getElementById('bulk-drop-zone').style.display = '';
   document.getElementById('bulk-running').style.display = 'none';
   document.getElementById('bulk-review').style.display = 'none';
@@ -1953,7 +1966,14 @@ function bulkPriceEx(row, cat, item) {
 async function startBulkImport(input) {
   const files = Array.from(input.files || []);
   if (!files.length) return;
+  // 写真の読み取りだけAPIキーが要る（貼り付けでの取り込みには不要）
+  if (!getAiApiKey()) {
+    alert('写真から読み取るには、先にヘッダーの「AI設定」からAPIキーを登録してください。\nAPIキーが無い場合は、下の貼り付け欄から取り込めます。');
+    input.value = '';
+    return;
+  }
   document.getElementById('bulk-drop-zone').style.display = 'none';
+  document.getElementById('bulk-paste').style.display = 'none';
   document.getElementById('bulk-running').style.display = '';
   const bar = document.getElementById('bulk-bar');
   const status = document.getElementById('bulk-status');
@@ -1998,8 +2018,15 @@ async function startBulkImport(input) {
     bulkLog('商品を読み取れませんでした。写真の向きやピントを確認してください。', true);
     return;
   }
+  buildBulkReview(collected, false);
+}
 
-  // 同じ商品が複数の納品書にあった場合は最後（＝より新しい納品書）の単価を採用
+// 読み取った行を既存品目と突き合わせて確認画面を作る。
+// 写真からの読み取りと、テキストの貼り付けで共通に使う。
+// checkNew: 新規品目に最初からチェックを入れるか。写真は誤読があり得るので
+// オフ、手で貼り付けたテキストは意図的な入力なのでオン。
+function buildBulkReview(collected, checkNew) {
+  // 同じ商品が複数回出てきた場合は最後（＝より新しい納品書）の単価を採用
   const byName = new Map();
   collected.forEach(r => byName.set(normName(r.name), r));
   bulkRows = Array.from(byName.values()).map(r => {
@@ -2009,12 +2036,44 @@ async function startBulkImport(input) {
     const idx = hit ? hit.idx : -1;
     const cur = hit ? data[cat][idx].priceEx : null;
     const priceEx = bulkPriceEx(r, cat, hit ? data[cat][idx] : null);
-    return { ...r, cat, idx, cur, priceEx, checked: hit ? cur !== priceEx : false };
+    return { ...r, cat, idx, cur, priceEx, checked: hit ? cur !== priceEx : !!checkNew };
   });
   // 部門順→商品名順に並べて確認しやすくする
   bulkRows.sort((a, b) =>
     DATA_CATS.indexOf(a.cat) - DATA_CATS.indexOf(b.cat) || a.name.localeCompare(b.name, 'ja'));
   renderBulkReview();
+}
+
+// 「品名<tab|カンマ>単位<tab|カンマ>税抜単価」の行を貼り付けて取り込む。
+// APIキーも写真も不要で、手入力せずに品目を登録できる。
+function startBulkFromText() {
+  const text = document.getElementById('bulk-text').value;
+  const collected = [];
+  const bad = [];
+  text.split(/\r?\n/).forEach((line, n) => {
+    const t = line.trim();
+    if (!t) return;
+    const cols = t.split(/\t|,|，/).map(c => c.trim());
+    if (cols.length < 2) { bad.push(`${n + 1}行目: 列が足りません「${t}」`); return; }
+    // 単位を省いた「品名,単価」の2列にも対応する
+    const name = cols[0];
+    const unit = cols.length >= 3 ? cols[1] : '';
+    const priceRaw = cols.length >= 3 ? cols[2] : cols[1];
+    const price = parseFloat(String(priceRaw).replace(/[¥,、\s]/g, ''));
+    if (!name || !isFinite(price) || price <= 0) { bad.push(`${n + 1}行目: 単価が読めません「${t}」`); return; }
+    collected.push({ name, unit, rawPrice: price, taxIncluded: false, file: '貼り付け' });
+  });
+
+  document.getElementById('bulk-drop-zone').style.display = 'none';
+  document.getElementById('bulk-paste').style.display = 'none';
+  document.getElementById('bulk-running').style.display = '';
+  document.getElementById('bulk-status').textContent = `${collected.length}件を読み込みました`;
+  bad.forEach(m => bulkLog(m, true));
+  if (!collected.length) {
+    bulkLog('取り込める行がありませんでした。', true);
+    return;
+  }
+  buildBulkReview(collected, true);
 }
 
 function renderBulkReview() {
